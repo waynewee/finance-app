@@ -65,6 +65,51 @@ function getReferenceDate(period: RetirementBalancePeriod): Date {
   return new Date(period.year, period.monthIndex + 1, 0);
 }
 
+function getMonthsBetweenPeriods(
+  currentPeriod: RetirementBalancePeriod,
+  previousPeriod: RetirementBalancePeriod,
+): number {
+  return (
+    (currentPeriod.year - previousPeriod.year) * 12 +
+    (currentPeriod.monthIndex - previousPeriod.monthIndex)
+  );
+}
+
+function getMonthlyContributionFutureValueFactor(
+  monthlyReturnRate: number,
+  months: number,
+): number {
+  if (months <= 0) {
+    return 0;
+  }
+
+  if (monthlyReturnRate === 0) {
+    return months;
+  }
+
+  return (Math.pow(1 + monthlyReturnRate, months) - 1) / monthlyReturnRate;
+}
+
+function inferMonthlyContributionFromModeledDelta(
+  modeledEndingBalance: number,
+  actualEndingBalance: number,
+  monthlyReturnRate: number,
+  months: number,
+): number | null {
+  const contributionFactor = getMonthlyContributionFutureValueFactor(
+    monthlyReturnRate,
+    months,
+  );
+
+  if (!Number.isFinite(contributionFactor) || contributionFactor <= 0) {
+    return null;
+  }
+
+  const inferred =
+    (actualEndingBalance - modeledEndingBalance) / contributionFactor;
+  return Number.isFinite(inferred) ? inferred : null;
+}
+
 export function getCurrentAgeFromDateOfBirth(
   dateOfBirth: string | null,
   now: Date = new Date(),
@@ -117,16 +162,17 @@ export function calculateFireProjection(
   settings: FireSettings,
   snapshots?: {
     currentSnapshot?: FireProjectionSnapshot | null;
-    previousSnapshot?: FireProjectionSnapshot | null;
+    previousSnapshots?: FireProjectionSnapshot[];
   },
 ): FireProjection {
   const normalizedSettings = sanitizeFireSettings(settings);
   const currentAge = getCurrentAgeFromDateOfBirth(
     normalizedSettings.dateOfBirth,
   );
+  const firstPreviousSnapshot = snapshots?.previousSnapshots?.[0] ?? null;
   const observedMonthlyNetWorthChange =
-    snapshots?.currentSnapshot && snapshots.previousSnapshot
-      ? snapshots.currentSnapshot.total - snapshots.previousSnapshot.total
+    snapshots?.currentSnapshot && firstPreviousSnapshot
+      ? snapshots.currentSnapshot.total - firstPreviousSnapshot.total
       : null;
   const fireNumber =
     normalizedSettings.withdrawalRate > 0
@@ -137,7 +183,7 @@ export function calculateFireProjection(
   const currentMonthlyContribution = inferMonthlyLiquidContribution(
     normalizedSettings,
     snapshots?.currentSnapshot ?? null,
-    snapshots?.previousSnapshot ?? null,
+    snapshots?.previousSnapshots ?? [],
   );
   const annualContribution = (currentMonthlyContribution ?? 0) * 12;
   const retirementProjection = retirementSystem
@@ -206,27 +252,72 @@ export function calculateFireProjection(
 function inferMonthlyLiquidContribution(
   settings: FireSettings,
   currentSnapshot: FireProjectionSnapshot | null,
-  previousSnapshot: FireProjectionSnapshot | null,
+  previousSnapshots: FireProjectionSnapshot[],
 ): number | null {
-  if (!currentSnapshot || !previousSnapshot) {
+  if (!currentSnapshot || previousSnapshots.length === 0) {
+    return null;
+  }
+
+  const intervalContributions: number[] = [];
+  let intervalEndSnapshot = currentSnapshot;
+
+  for (const previousSnapshot of previousSnapshots) {
+    const intervalContribution = inferMonthlyLiquidContributionForInterval(
+      settings,
+      intervalEndSnapshot,
+      previousSnapshot,
+    );
+
+    if (intervalContribution == null) {
+      return null;
+    }
+
+    intervalContributions.push(intervalContribution);
+    intervalEndSnapshot = previousSnapshot;
+  }
+
+  if (intervalContributions.length === 0) {
+    return null;
+  }
+
+  const averageContribution =
+    intervalContributions.reduce((sum, value) => sum + value, 0) /
+    intervalContributions.length;
+  return Number.isFinite(averageContribution) ? averageContribution : null;
+}
+
+function inferMonthlyLiquidContributionForInterval(
+  settings: FireSettings,
+  currentSnapshot: FireProjectionSnapshot,
+  previousSnapshot: FireProjectionSnapshot,
+): number | null {
+  const monthsBetween = getMonthsBetweenPeriods(
+    currentSnapshot,
+    previousSnapshot,
+  );
+  if (monthsBetween <= 0) {
     return null;
   }
 
   const normalizedSettings = sanitizeFireSettings(settings);
   const retirementSystem = normalizedSettings.retirementSystem;
+  const monthlyReturnRate = toMonthlyReturnRate(
+    normalizedSettings.expectedAnnualReturn,
+  );
 
   if (!retirementSystem) {
-    const monthlyReturnRate = toMonthlyReturnRate(
-      normalizedSettings.expectedAnnualReturn,
-    );
     const baseline = projectBalance(
       previousSnapshot.total,
       0,
       monthlyReturnRate,
-      1,
+      monthsBetween,
     );
-    const inferred = currentSnapshot.total - baseline;
-    return Number.isFinite(inferred) ? inferred : null;
+    return inferMonthlyContributionFromModeledDelta(
+      baseline,
+      currentSnapshot.total,
+      monthlyReturnRate,
+      monthsBetween,
+    );
   }
 
   const previousAge = getCurrentAgeFromDateOfBirth(
@@ -240,16 +331,20 @@ function inferMonthlyLiquidContribution(
     liquidMonthlyContribution: 0,
     liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
     fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
-    projectionMonths: 1,
-    snapshotFrequencyMonths: 1,
+    projectionMonths: monthsBetween,
+    snapshotFrequencyMonths: monthsBetween,
     startingBalancePeriod: previousSnapshot,
     system: retirementSystem,
   });
   const modeledTotal =
     baselineProjection.projection[baselineProjection.projection.length - 1]
       ?.totalBalance ?? previousSnapshot.total;
-  const inferred = currentSnapshot.total - modeledTotal;
-  return Number.isFinite(inferred) ? inferred : null;
+  return inferMonthlyContributionFromModeledDelta(
+    modeledTotal,
+    currentSnapshot.total,
+    monthlyReturnRate,
+    monthsBetween,
+  );
 }
 
 export function calculateMonthsToFire(

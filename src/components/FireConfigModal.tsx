@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 import { Flame, Plus, Settings2, Target, Trash2, X } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
 import { sanitizeFireSettings } from "../lib/fire";
-import { type FireSnapshotPreference } from "../lib/firePreferences";
+import {
+  type FireSavingsAveragePreference,
+  type FireSnapshotPreference,
+} from "../lib/firePreferences";
 import { type FireSettings } from "../lib/netWorthRepository";
 import {
   CPF_EXAMPLE_RETIREMENT_SYSTEM,
@@ -28,10 +31,16 @@ interface Props {
   latestSnapshot: LatestSnapshot | null;
   previousSnapshot: LatestSnapshot | null;
   snapshotPreference: FireSnapshotPreference;
+  savingsAveragePreference: FireSavingsAveragePreference;
   onSnapshotPreferenceChange: (preference: FireSnapshotPreference) => void;
+  onSavingsAveragePreferenceChange: (
+    preference: FireSavingsAveragePreference,
+  ) => void;
   onUpdate: (settings: FireSettings) => void;
   onClose: () => void;
 }
+
+const SAVINGS_AVERAGE_OPTIONS: FireSavingsAveragePreference[] = [3, 6];
 
 function parseNumber(value: string): number {
   const parsed = Number(value);
@@ -86,7 +95,9 @@ export default function FireConfigModal({
   latestSnapshot,
   previousSnapshot,
   snapshotPreference,
+  savingsAveragePreference,
   onSnapshotPreferenceChange,
+  onSavingsAveragePreferenceChange,
   onUpdate,
   onClose,
 }: Props) {
@@ -433,10 +444,11 @@ export default function FireConfigModal({
 
             <div className="space-y-4">
               <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-gray-600">
-                Monthly liquid savings are inferred from your latest two net
-                worth snapshots. The planner backs out expected market growth
-                and modeled retirement contributions, so you do not need to
-                enter a separate savings number here.
+                Monthly liquid savings are inferred from a trailing 3- or
+                6-month average using your selected FIRE month. The planner
+                backs out expected market growth and modeled retirement
+                contributions, so you do not need to enter a separate savings
+                number here.
               </div>
 
               <label className="block">
@@ -545,6 +557,37 @@ export default function FireConfigModal({
                     previous-month FIRE view.
                   </p>
                 ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3">
+                <p className="text-sm font-medium text-gray-700">
+                  Savings inference window
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose whether FIRE uses a trailing 3-month or 6-month average
+                  for inferred liquid savings. This preference is saved on this
+                  device.
+                </p>
+                <div className="mt-3 flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+                  {SAVINGS_AVERAGE_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onSavingsAveragePreferenceChange(option)}
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        savingsAveragePreference === option
+                          ? "bg-white text-indigo-700 shadow-sm"
+                          : "text-gray-500 hover:text-indigo-600"
+                      }`}
+                    >
+                      {option}-month average
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  The tracker needs {savingsAveragePreference} earlier recorded{" "}
+                  months for the selected FIRE month.
+                </p>
               </div>
             </div>
           </section>

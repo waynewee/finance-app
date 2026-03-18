@@ -21,10 +21,13 @@ import FireConfigModal from "./components/FireConfigModal";
 import FireTracker from "./components/FireTracker";
 import ShareAccountModal from "./components/ShareAccountModal";
 import {
+  getStoredFireSavingsAveragePreference,
   getStoredFireSnapshotPreference,
   getStoredSummarySnapshotPreference,
+  setStoredFireSavingsAveragePreference,
   setStoredFireSnapshotPreference,
   setStoredSummarySnapshotPreference,
+  type FireSavingsAveragePreference,
   type FireSnapshotPreference,
 } from "./lib/firePreferences";
 
@@ -44,6 +47,8 @@ function App() {
     useState<FireSnapshotPreference>("current");
   const [fireSnapshotPreference, setFireSnapshotPreference] =
     useState<FireSnapshotPreference>("current");
+  const [fireSavingsAveragePreference, setFireSavingsAveragePreference] =
+    useState<FireSavingsAveragePreference>(3);
   const [email, setEmail] = useState("");
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isSendingLink, setIsSendingLink] = useState(false);
@@ -90,6 +95,9 @@ function App() {
   useEffect(() => {
     setSummarySnapshotPreference(getStoredSummarySnapshotPreference(user?.id));
     setFireSnapshotPreference(getStoredFireSnapshotPreference(user?.id));
+    setFireSavingsAveragePreference(
+      getStoredFireSavingsAveragePreference(user?.id),
+    );
   }, [user?.id]);
 
   const updateSummarySnapshotPreference = (
@@ -102,6 +110,13 @@ function App() {
   const updateFireSnapshotPreference = (preference: FireSnapshotPreference) => {
     setFireSnapshotPreference(preference);
     setStoredFireSnapshotPreference(user?.id, preference);
+  };
+
+  const updateFireSavingsAveragePreference = (
+    preference: FireSavingsAveragePreference,
+  ) => {
+    setFireSavingsAveragePreference(preference);
+    setStoredFireSavingsAveragePreference(user?.id, preference);
   };
 
   const handleSendMagicLink = async () => {
@@ -496,8 +511,12 @@ function App() {
                         selectedSnapshot={fireSnapshot}
                         previousSnapshot={previousSnapshot}
                         snapshotPreference={fireSnapshotPreference}
+                        savingsAveragePreference={fireSavingsAveragePreference}
                         onSnapshotPreferenceChange={
                           updateFireSnapshotPreference
+                        }
+                        onSavingsAveragePreferenceChange={
+                          updateFireSavingsAveragePreference
                         }
                         onOpenConfig={() => setShowFireConfig(true)}
                       />
@@ -557,7 +576,9 @@ function App() {
           latestSnapshot={latestSnapshot}
           previousSnapshot={previousSnapshot}
           snapshotPreference={fireSnapshotPreference}
+          savingsAveragePreference={fireSavingsAveragePreference}
           onSnapshotPreferenceChange={updateFireSnapshotPreference}
+          onSavingsAveragePreferenceChange={updateFireSavingsAveragePreference}
           onUpdate={updateFireSettings}
           onClose={() => setShowFireConfig(false)}
         />

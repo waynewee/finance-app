@@ -5,7 +5,10 @@ import {
   getCurrentAgeFromDateOfBirth,
   type FireProjectionSnapshot,
 } from "../lib/fire";
-import { type FireSnapshotPreference } from "../lib/firePreferences";
+import {
+  type FireSavingsAveragePreference,
+  type FireSnapshotPreference,
+} from "../lib/firePreferences";
 import { type FireSettings } from "../lib/netWorthRepository";
 import type {
   RetirementAccountClassification,
@@ -24,9 +27,15 @@ interface Props {
   selectedSnapshot: LatestSnapshot | null;
   previousSnapshot: LatestSnapshot | null;
   snapshotPreference: FireSnapshotPreference;
+  savingsAveragePreference: FireSavingsAveragePreference;
   onSnapshotPreferenceChange: (preference: FireSnapshotPreference) => void;
+  onSavingsAveragePreferenceChange: (
+    preference: FireSavingsAveragePreference,
+  ) => void;
   onOpenConfig: () => void;
 }
+
+const SAVINGS_AVERAGE_OPTIONS: FireSavingsAveragePreference[] = [3, 6];
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("en-US", {
@@ -84,7 +93,9 @@ export default function FireTracker({
   selectedSnapshot,
   previousSnapshot,
   snapshotPreference,
+  savingsAveragePreference,
   onSnapshotPreferenceChange,
+  onSavingsAveragePreferenceChange,
   onOpenConfig,
 }: Props) {
   if (!selectedSnapshot) {
@@ -116,16 +127,24 @@ export default function FireTracker({
       snapshot.year === selectedSnapshot.year &&
       snapshot.monthIndex === selectedSnapshot.monthIndex,
   );
-  const priorSnapshotForProjection =
+  const priorSnapshotsForAverage =
     selectedSnapshotIndex >= 0
-      ? (snapshots[selectedSnapshotIndex + 1] ?? null)
-      : null;
+      ? snapshots.slice(
+          selectedSnapshotIndex + 1,
+          selectedSnapshotIndex + 1 + savingsAveragePreference,
+        )
+      : [];
+  const hasEnoughSavingsHistory =
+    priorSnapshotsForAverage.length === savingsAveragePreference;
+  const savingsInferenceSnapshots = hasEnoughSavingsHistory
+    ? priorSnapshotsForAverage
+    : [];
   const projection = calculateFireProjection(
     selectedSnapshot.total,
     fireSettings,
     {
       currentSnapshot: selectedSnapshot,
-      previousSnapshot: priorSnapshotForProjection,
+      previousSnapshots: savingsInferenceSnapshots,
     },
   );
   const currentAge = getCurrentAgeFromDateOfBirth(fireSettings.dateOfBirth);
@@ -137,6 +156,12 @@ export default function FireTracker({
     selectedSnapshot.year,
     selectedSnapshot.monthIndex,
   );
+  const oldestSavingsSnapshot =
+    savingsInferenceSnapshots[savingsInferenceSnapshots.length - 1] ?? null;
+  const missingSavingsHistoryCount = Math.max(
+    savingsAveragePreference - priorSnapshotsForAverage.length,
+    0,
+  );
   const targetAgeSummary =
     projection.targetYearsAway == null
       ? "Add your date of birth and target FIRE age in settings."
@@ -147,10 +172,13 @@ export default function FireTracker({
           ? `On track for age ${fireSettings.targetFireAge}.`
           : `${formatCurrency(projection.requiredMonthlyContribution)} per month needed to reach age ${fireSettings.targetFireAge}.`;
   const contributionSummary =
-    priorSnapshotForProjection == null ||
-    projection.currentMonthlyContribution == null
-      ? "Add one earlier net worth month to infer your current liquid savings rate."
-      : `${formatCurrency(projection.currentMonthlyContribution)} per month inferred from ${formatMonthPeriod(priorSnapshotForProjection.year, priorSnapshotForProjection.monthIndex)} to ${selectedMonthLabel}.`;
+    !hasEnoughSavingsHistory || projection.currentMonthlyContribution == null
+      ? `Add ${missingSavingsHistoryCount} earlier net worth ${missingSavingsHistoryCount === 1 ? "month" : "months"} to infer your ${savingsAveragePreference}-month average liquid savings rate.`
+      : `${formatCurrency(projection.currentMonthlyContribution)} per month averaged across ${savingsAveragePreference} months from ${formatMonthPeriod(oldestSavingsSnapshot.year, oldestSavingsSnapshot.monthIndex)} to ${selectedMonthLabel}.`;
+  const timeToFireValue =
+    hasEnoughSavingsHistory && projection.currentMonthlyContribution != null
+      ? formatYears(projection.yearsToFire)
+      : "- years";
 
   const cards = [
     {
@@ -169,10 +197,11 @@ export default function FireTracker({
     },
     {
       label: "Time To FIRE",
-      value: formatYears(projection.yearsToFire),
+      value: timeToFireValue,
       helper: `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
       icon: TrendingUp,
       accent: "from-emerald-500/15 to-teal-500/5 text-emerald-700",
+      hasSavingsAverageToggle: true,
     },
     {
       label: "Target Age Plan",
@@ -279,6 +308,26 @@ export default function FireTracker({
                   <p className="mt-2 text-2xl font-semibold text-gray-900">
                     {card.value}
                   </p>
+                  {card.hasSavingsAverageToggle ? (
+                    <div className="mt-3 flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+                      {SAVINGS_AVERAGE_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() =>
+                            onSavingsAveragePreferenceChange(option)
+                          }
+                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                            savingsAveragePreference === option
+                              ? "bg-white text-indigo-700 shadow-sm"
+                              : "text-gray-500 hover:text-indigo-600"
+                          }`}
+                        >
+                          {option}-month avg
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div
                   className={`rounded-2xl bg-gradient-to-br p-3 ${card.accent}`}
@@ -305,6 +354,14 @@ export default function FireTracker({
           Previous-month FIRE view is saved as your preference, but there is no
           earlier recorded month yet, so the tracker is using{" "}
           {selectedMonthLabel}.
+        </div>
+      ) : null}
+
+      {!hasEnoughSavingsHistory ? (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {missingSavingsHistoryCount > 0
+            ? `Your ${savingsAveragePreference}-month savings average is saved as the FIRE inference preference, but there is not enough earlier history yet. Add ${missingSavingsHistoryCount} more recorded ${missingSavingsHistoryCount === 1 ? "month" : "months"} to use it.`
+            : "Not enough history is available to infer the selected savings average."}
         </div>
       ) : null}
 
