@@ -83,6 +83,9 @@ export interface RetirementProjectionPoint {
   accessibleBalance: number;
   liquidBalance: number;
   estimatedMonthlyIncome: number;
+  cumulativeLiquidContributions: number;
+  cumulativeRetirementContributions: number;
+  cumulativeInvestmentGrowth: number;
   breakdown: FireLiquidityBreakdown;
   accountBalances: Record<string, number>;
 }
@@ -126,7 +129,6 @@ export interface RetirementProjectionResult {
 
 export interface RetirementProjectionOptions {
   currentNetWorth: number;
-  monthlyIncome: number;
   currentAge: number | null;
   contributionStopAge?: number | null;
   liquidMonthlyContribution: number;
@@ -135,6 +137,7 @@ export interface RetirementProjectionOptions {
   fireNumber?: number;
   projectionMonths?: number;
   snapshotFrequencyMonths?: number;
+  startingBalancePeriod?: RetirementBalancePeriod | null;
   system: RetirementSystemConfig;
 }
 
@@ -447,6 +450,11 @@ function createProjectionPoint(
   system: RetirementSystemConfig,
   balances: Record<string, number>,
   fallbackAnnualWithdrawalRate: number,
+  metrics: {
+    cumulativeLiquidContributions: number;
+    cumulativeRetirementContributions: number;
+    cumulativeInvestmentGrowth: number;
+  },
 ): RetirementProjectionPoint {
   const breakdown = createBreakdown(
     liquidBalance,
@@ -482,6 +490,10 @@ function createProjectionPoint(
     accessibleBalance: breakdown.accessibleNow,
     liquidBalance: breakdown.liquid,
     estimatedMonthlyIncome,
+    cumulativeLiquidContributions: metrics.cumulativeLiquidContributions,
+    cumulativeRetirementContributions:
+      metrics.cumulativeRetirementContributions,
+    cumulativeInvestmentGrowth: metrics.cumulativeInvestmentGrowth,
     breakdown,
     accountBalances,
   };
@@ -525,10 +537,49 @@ function buildProjectionMembers(
     {
       id: "household",
       name: "Household",
-      monthlyIncome: clampNumber(options.monthlyIncome),
+      monthlyIncome: 0,
       currentAge: options.currentAge,
     },
   ];
+}
+
+function sumBalances(balances: Record<string, number>): number {
+  return Object.values(balances).reduce(
+    (sum, balance) => sum + clampNumber(balance),
+    0,
+  );
+}
+
+export function getRetirementBalanceMapAtOrBeforePeriod(
+  system: RetirementSystemConfig | null | undefined,
+  period?: RetirementBalancePeriod | null,
+): Record<string, number> {
+  const sanitized = sanitizeRetirementSystemConfig(system);
+  if (!sanitized) {
+    return {};
+  }
+
+  const balances = sanitized.accounts.reduce<Record<string, number>>(
+    (result, account) => {
+      result[account.id] = account.balance;
+      return result;
+    },
+    {},
+  );
+
+  if (!period) {
+    return balances;
+  }
+
+  sanitized.balanceHistory?.forEach((snapshot) => {
+    if (comparePeriods(snapshot, period) > 0) {
+      return;
+    }
+
+    balances[snapshot.accountId] = snapshot.balance;
+  });
+
+  return balances;
 }
 
 function alignStartingBalancesToNetWorth(
@@ -1091,11 +1142,14 @@ export function calculateRetirementProjection(
       options.snapshotFrequencyMonths ?? DEFAULT_SNAPSHOT_FREQUENCY_MONTHS,
     ),
   );
-  const balancePeriod = getLatestRetirementBalancePeriod(system);
-  const rawStartingBalances = getRetirementBalanceMapForPeriod(
-    system,
-    balancePeriod,
-  );
+  const balancePeriod =
+    options.startingBalancePeriod ?? getLatestRetirementBalancePeriod(system);
+  const rawStartingBalances = options.startingBalancePeriod
+    ? getRetirementBalanceMapAtOrBeforePeriod(
+        system,
+        options.startingBalancePeriod,
+      )
+    : getRetirementBalanceMapForPeriod(system, balancePeriod);
   const { balances: startingBalances, trackedRetirementBalance } =
     alignStartingBalancesToNetWorth(
       rawStartingBalances,
@@ -1127,6 +1181,9 @@ export function calculateRetirementProjection(
   let payoutSnapshot: RetirementProjectionPoint | null = null;
   const members = buildProjectionMembers(system, options);
   const yearToDateContribution = new Map<string, number>();
+  let cumulativeLiquidContributions = 0;
+  let cumulativeRetirementContributions = 0;
+  let cumulativeInvestmentGrowth = 0;
 
   const initialPoint = createProjectionPoint(
     0,
@@ -1135,6 +1192,11 @@ export function calculateRetirementProjection(
     system,
     accountBalances,
     options.fallbackAnnualWithdrawalRate,
+    {
+      cumulativeLiquidContributions,
+      cumulativeRetirementContributions,
+      cumulativeInvestmentGrowth,
+    },
   );
   const projection: RetirementProjectionPoint[] = [initialPoint];
 
@@ -1149,17 +1211,26 @@ export function calculateRetirementProjection(
   for (let month = 1; month <= projectionMonths; month += 1) {
     const contributionAge =
       options.currentAge == null ? null : options.currentAge + (month - 1) / 12;
+    const totalBefore = liquidBalance + sumBalances(accountBalances);
+    const liquidContribution = shouldApplyContributionAtAge(
+      contributionAge,
+      contributionStopAge,
+    )
+      ? Number.isFinite(options.liquidMonthlyContribution)
+        ? options.liquidMonthlyContribution
+        : 0
+      : 0;
     liquidBalance =
       liquidBalance * (1 + toMonthlyReturnRate(options.liquidAnnualReturn)) +
-      (shouldApplyContributionAtAge(contributionAge, contributionStopAge)
-        ? clampNumber(options.liquidMonthlyContribution)
-        : 0);
+      liquidContribution;
 
     system.accounts.forEach((account) => {
       accountBalances[account.id] =
         accountBalances[account.id] *
         (1 + toMonthlyReturnRate(account.annualReturnRate));
     });
+
+    const retirementTotalBeforeContributions = sumBalances(accountBalances);
 
     members.forEach((member) => {
       const memberAge =
@@ -1210,6 +1281,17 @@ export function calculateRetirementProjection(
       );
     });
 
+    const retirementContribution = Math.max(
+      sumBalances(accountBalances) - retirementTotalBeforeContributions,
+      0,
+    );
+    const totalAfter = liquidBalance + sumBalances(accountBalances);
+    const investmentGrowth =
+      totalAfter - totalBefore - liquidContribution - retirementContribution;
+    cumulativeLiquidContributions += liquidContribution;
+    cumulativeRetirementContributions += retirementContribution;
+    cumulativeInvestmentGrowth += investmentGrowth;
+
     if (month % 12 === 0) {
       yearToDateContribution.clear();
     }
@@ -1223,6 +1305,11 @@ export function calculateRetirementProjection(
       system,
       accountBalances,
       options.fallbackAnnualWithdrawalRate,
+      {
+        cumulativeLiquidContributions,
+        cumulativeRetirementContributions,
+        cumulativeInvestmentGrowth,
+      },
     );
 
     if (

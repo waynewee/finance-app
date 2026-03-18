@@ -3,7 +3,12 @@ import {
   calculateRetirementProjection,
   sanitizeRetirementSystemConfig,
   type RetirementProjectionResult,
+  type RetirementBalancePeriod,
 } from "./retirementSystem";
+
+export interface FireProjectionSnapshot extends RetirementBalancePeriod {
+  total: number;
+}
 
 export interface FireProjection {
   annualContribution: number;
@@ -16,6 +21,8 @@ export interface FireProjection {
   requiredMonthlyContribution: number | null;
   accessibleNetWorth: number;
   grossNetWorth: number;
+  currentMonthlyContribution: number | null;
+  observedMonthlyNetWorthChange: number | null;
   retirementProjection: RetirementProjectionResult | null;
 }
 
@@ -54,6 +61,10 @@ function isValidDateOfBirth(value: string | null): value is string {
   return !Number.isNaN(timestamp);
 }
 
+function getReferenceDate(period: RetirementBalancePeriod): Date {
+  return new Date(period.year, period.monthIndex + 1, 0);
+}
+
 export function getCurrentAgeFromDateOfBirth(
   dateOfBirth: string | null,
   now: Date = new Date(),
@@ -81,8 +92,6 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
     annualSpendingGoal: Math.max(0, settings.annualSpendingGoal),
     withdrawalRate: Math.max(0.1, settings.withdrawalRate),
     expectedAnnualReturn: settings.expectedAnnualReturn,
-    monthlyContribution: Math.max(0, settings.monthlyContribution),
-    monthlyIncome: Math.max(0, settings.monthlyIncome),
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
       ? settings.dateOfBirth
       : null,
@@ -90,6 +99,11 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
       settings.targetFireAge == null || settings.targetFireAge <= 0
         ? null
         : settings.targetFireAge,
+    retirementContributionStopAge:
+      settings.retirementContributionStopAge == null ||
+      settings.retirementContributionStopAge <= 0
+        ? null
+        : settings.retirementContributionStopAge,
     retirementSystem: sanitizeRetirementSystemConfig(settings.retirementSystem),
   };
 }
@@ -101,15 +115,18 @@ export function getDefaultFireSettings(): FireSettings {
 export function calculateFireProjection(
   currentNetWorth: number,
   settings: FireSettings,
+  snapshots?: {
+    currentSnapshot?: FireProjectionSnapshot | null;
+    previousSnapshot?: FireProjectionSnapshot | null;
+  },
 ): FireProjection {
   const normalizedSettings = sanitizeFireSettings(settings);
   const currentAge = getCurrentAgeFromDateOfBirth(
     normalizedSettings.dateOfBirth,
   );
-  const annualContribution = normalizedSettings.monthlyContribution * 12;
-  const contributionStopAge =
-    currentAge != null && normalizedSettings.targetFireAge != null
-      ? normalizedSettings.targetFireAge
+  const observedMonthlyNetWorthChange =
+    snapshots?.currentSnapshot && snapshots.previousSnapshot
+      ? snapshots.currentSnapshot.total - snapshots.previousSnapshot.total
       : null;
   const fireNumber =
     normalizedSettings.withdrawalRate > 0
@@ -117,13 +134,18 @@ export function calculateFireProjection(
         (normalizedSettings.withdrawalRate / 100)
       : Number.POSITIVE_INFINITY;
   const retirementSystem = normalizedSettings.retirementSystem;
+  const currentMonthlyContribution = inferMonthlyLiquidContribution(
+    normalizedSettings,
+    snapshots?.currentSnapshot ?? null,
+    snapshots?.previousSnapshot ?? null,
+  );
+  const annualContribution = (currentMonthlyContribution ?? 0) * 12;
   const retirementProjection = retirementSystem
     ? calculateRetirementProjection({
         currentNetWorth,
-        monthlyIncome: normalizedSettings.monthlyIncome,
         currentAge,
-        contributionStopAge,
-        liquidMonthlyContribution: normalizedSettings.monthlyContribution,
+        contributionStopAge: normalizedSettings.retirementContributionStopAge,
+        liquidMonthlyContribution: currentMonthlyContribution ?? 0,
         liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
         fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
         fireNumber,
@@ -142,7 +164,7 @@ export function calculateFireProjection(
     calculateMonthsToFire(
       currentNetWorth,
       fireNumber,
-      normalizedSettings.monthlyContribution,
+      currentMonthlyContribution ?? 0,
       normalizedSettings.expectedAnnualReturn,
     );
   const targetYearsAway =
@@ -161,6 +183,7 @@ export function calculateFireProjection(
           targetYearsAway,
           normalizedSettings,
           currentAge,
+          currentMonthlyContribution ?? 0,
         );
 
   return {
@@ -174,8 +197,59 @@ export function calculateFireProjection(
     requiredMonthlyContribution,
     accessibleNetWorth,
     grossNetWorth,
+    currentMonthlyContribution,
+    observedMonthlyNetWorthChange,
     retirementProjection,
   };
+}
+
+function inferMonthlyLiquidContribution(
+  settings: FireSettings,
+  currentSnapshot: FireProjectionSnapshot | null,
+  previousSnapshot: FireProjectionSnapshot | null,
+): number | null {
+  if (!currentSnapshot || !previousSnapshot) {
+    return null;
+  }
+
+  const normalizedSettings = sanitizeFireSettings(settings);
+  const retirementSystem = normalizedSettings.retirementSystem;
+
+  if (!retirementSystem) {
+    const monthlyReturnRate = toMonthlyReturnRate(
+      normalizedSettings.expectedAnnualReturn,
+    );
+    const baseline = projectBalance(
+      previousSnapshot.total,
+      0,
+      monthlyReturnRate,
+      1,
+    );
+    const inferred = currentSnapshot.total - baseline;
+    return Number.isFinite(inferred) ? inferred : null;
+  }
+
+  const previousAge = getCurrentAgeFromDateOfBirth(
+    normalizedSettings.dateOfBirth,
+    getReferenceDate(previousSnapshot),
+  );
+  const baselineProjection = calculateRetirementProjection({
+    currentNetWorth: previousSnapshot.total,
+    currentAge: previousAge,
+    contributionStopAge: normalizedSettings.retirementContributionStopAge,
+    liquidMonthlyContribution: 0,
+    liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
+    fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
+    projectionMonths: 1,
+    snapshotFrequencyMonths: 1,
+    startingBalancePeriod: previousSnapshot,
+    system: retirementSystem,
+  });
+  const modeledTotal =
+    baselineProjection.projection[baselineProjection.projection.length - 1]
+      ?.totalBalance ?? previousSnapshot.total;
+  const inferred = currentSnapshot.total - modeledTotal;
+  return Number.isFinite(inferred) ? inferred : null;
 }
 
 export function calculateMonthsToFire(
@@ -208,6 +282,7 @@ export function calculateRequiredMonthlyContribution(
   targetYearsAway: number,
   settings?: FireSettings,
   currentAge?: number | null,
+  currentMonthlyContribution = 0,
 ): number | null {
   const normalizedSettings = settings ? sanitizeFireSettings(settings) : null;
   const retirementSystem = normalizedSettings?.retirementSystem ?? null;
@@ -215,13 +290,9 @@ export function calculateRequiredMonthlyContribution(
     normalizedSettings && retirementSystem
       ? calculateRetirementProjection({
           currentNetWorth,
-          monthlyIncome: normalizedSettings.monthlyIncome,
           currentAge: currentAge ?? null,
-          contributionStopAge:
-            currentAge != null && normalizedSettings.targetFireAge != null
-              ? normalizedSettings.targetFireAge
-              : null,
-          liquidMonthlyContribution: normalizedSettings.monthlyContribution,
+          contributionStopAge: normalizedSettings.retirementContributionStopAge,
+          liquidMonthlyContribution: 0,
           liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
           fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
           projectionMonths: 0,
@@ -243,12 +314,8 @@ export function calculateRequiredMonthlyContribution(
     const reachesTarget = (monthlyContribution: number): boolean => {
       const projection = calculateRetirementProjection({
         currentNetWorth,
-        monthlyIncome: normalizedSettings.monthlyIncome,
         currentAge: currentAge ?? null,
-        contributionStopAge:
-          currentAge != null && normalizedSettings.targetFireAge != null
-            ? normalizedSettings.targetFireAge
-            : null,
+        contributionStopAge: normalizedSettings.retirementContributionStopAge,
         liquidMonthlyContribution: monthlyContribution,
         liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
         fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
@@ -266,7 +333,7 @@ export function calculateRequiredMonthlyContribution(
     }
 
     let low = 0;
-    let high = Math.max(normalizedSettings.monthlyContribution, 1_000);
+    let high = Math.max(currentMonthlyContribution, 1_000);
 
     while (!reachesTarget(high)) {
       high *= 2;

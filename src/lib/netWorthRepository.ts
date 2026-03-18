@@ -6,10 +6,9 @@ export interface FireSettings {
   annualSpendingGoal: number;
   withdrawalRate: number;
   expectedAnnualReturn: number;
-  monthlyContribution: number;
-  monthlyIncome: number;
   dateOfBirth: string | null;
   targetFireAge: number | null;
+  retirementContributionStopAge: number | null;
   retirementSystem: RetirementSystemConfig | null;
 }
 
@@ -17,10 +16,9 @@ export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   annualSpendingGoal: 60_000,
   withdrawalRate: 4,
   expectedAnnualReturn: 7,
-  monthlyContribution: 2_000,
-  monthlyIncome: 0,
   dateOfBirth: null,
   targetFireAge: null,
+  retirementContributionStopAge: null,
   retirementSystem: null,
 };
 
@@ -65,6 +63,7 @@ interface FireSettingsRow {
   current_age?: number | null;
   date_of_birth?: string | null;
   target_fire_age: number | null;
+  contribution_stop_age?: number | null;
   updated_at: string;
 }
 
@@ -90,11 +89,11 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     annualSpendingGoal: row.annual_spending_goal,
     withdrawalRate: row.withdrawal_rate,
     expectedAnnualReturn: row.expected_annual_return,
-    monthlyContribution: row.monthly_contribution,
-    monthlyIncome: row.monthly_income ?? 0,
     dateOfBirth:
       row.date_of_birth ?? inferDateOfBirthFromCurrentAge(row.current_age),
     targetFireAge: row.target_fire_age,
+    retirementContributionStopAge:
+      row.contribution_stop_age ?? row.target_fire_age,
     retirementSystem: row.retirement_system ?? null,
   };
 }
@@ -109,12 +108,13 @@ function mapFireSettingsToRow(
     annual_spending_goal: settings.annualSpendingGoal,
     withdrawal_rate: settings.withdrawalRate,
     expected_annual_return: settings.expectedAnnualReturn,
-    monthly_contribution: settings.monthlyContribution,
-    monthly_income: settings.monthlyIncome,
+    monthly_contribution: 0,
+    monthly_income: 0,
     retirement_system: settings.retirementSystem,
     current_age: null,
     date_of_birth: settings.dateOfBirth,
     target_fire_age: settings.targetFireAge,
+    contribution_stop_age: settings.retirementContributionStopAge,
     updated_at: new Date().toISOString(),
   };
 }

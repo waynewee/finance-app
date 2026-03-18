@@ -16,6 +16,8 @@ interface LatestNetWorthSnapshot {
   total: number;
 }
 
+export type NetWorthSnapshot = LatestNetWorthSnapshot;
+
 function getSortedSnapshots(
   monthlyData: MonthlyData,
 ): LatestNetWorthSnapshot[] {
@@ -197,6 +199,10 @@ export function useNetWorthData(accountUserId: string | null) {
     return getSortedSnapshots(monthlyData)[1] ?? null;
   }, [monthlyData]);
 
+  const getNetWorthSnapshots = useCallback((): LatestNetWorthSnapshot[] => {
+    return getSortedSnapshots(monthlyData);
+  }, [monthlyData]);
+
   const updateCategories = useCallback(
     (updated: Category[]) => {
       if (!accountUserId) {
@@ -244,6 +250,7 @@ export function useNetWorthData(accountUserId: string | null) {
     getMonthTotal,
     getCategoryMonthTotal,
     getLatestSnapshot,
+    getNetWorthSnapshots,
     getPreviousSnapshot,
     updateCategories,
     updateFireSettings,

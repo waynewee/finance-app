@@ -428,51 +428,16 @@ export default function FireConfigModal({
           <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4">
             <div className="mb-4 flex items-center gap-2 text-indigo-800">
               <Target size={18} />
-              <h3 className="font-semibold">Timeline Inputs</h3>
+              <h3 className="font-semibold">Timeline Controls</h3>
             </div>
 
             <div className="space-y-4">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Monthly savings toward FIRE
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={draft.monthlyContribution}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      monthlyContribution: parseNumber(event.target.value),
-                    }))
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Household monthly income fallback
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={draft.monthlyIncome}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      monthlyIncome: parseNumber(event.target.value),
-                    }))
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Used only when the retirement system does not define
-                  member-specific incomes.
-                </p>
-              </label>
+              <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-gray-600">
+                Monthly liquid savings are inferred from your latest two net
+                worth snapshots. The planner backs out expected market growth
+                and modeled retirement contributions, so you do not need to
+                enter a separate savings number here.
+              </div>
 
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">
@@ -508,6 +473,31 @@ export default function FireConfigModal({
                   }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Stop retirement contributions at age
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={draft.retirementContributionStopAge ?? ""}
+                  onChange={(event) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      retirementContributionStopAge: parseOptionalNumber(
+                        event.target.value,
+                      ),
+                    }))
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  CPF or retirement-account contributions stop at this age, even
+                  if your FIRE age is later.
+                </p>
               </label>
 
               <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3">
@@ -925,6 +915,9 @@ export default function FireConfigModal({
             per-member retirement balances. CPF-style contributions use each
             member's own age and income, and the latest monthly CPF balances
             become the starting point for projections.
+            {draft.retirementContributionStopAge != null
+              ? ` Retirement contributions stop at age ${draft.retirementContributionStopAge}.`
+              : ""}
           </div>
 
           <div className="flex items-center justify-end gap-3">

@@ -3,6 +3,7 @@ import { MONTHS } from "../data/defaultCategories";
 import {
   calculateFireProjection,
   getCurrentAgeFromDateOfBirth,
+  type FireProjectionSnapshot,
 } from "../lib/fire";
 import { type FireSnapshotPreference } from "../lib/firePreferences";
 import { type FireSettings } from "../lib/netWorthRepository";
@@ -19,6 +20,7 @@ interface LatestSnapshot {
 
 interface Props {
   fireSettings: FireSettings;
+  snapshots: FireProjectionSnapshot[];
   selectedSnapshot: LatestSnapshot | null;
   previousSnapshot: LatestSnapshot | null;
   snapshotPreference: FireSnapshotPreference;
@@ -78,6 +80,7 @@ function formatMemberIncome(member: RetirementMemberProjection): string {
 
 export default function FireTracker({
   fireSettings,
+  snapshots,
   selectedSnapshot,
   previousSnapshot,
   snapshotPreference,
@@ -108,9 +111,22 @@ export default function FireTracker({
     );
   }
 
+  const selectedSnapshotIndex = snapshots.findIndex(
+    (snapshot) =>
+      snapshot.year === selectedSnapshot.year &&
+      snapshot.monthIndex === selectedSnapshot.monthIndex,
+  );
+  const priorSnapshotForProjection =
+    selectedSnapshotIndex >= 0
+      ? (snapshots[selectedSnapshotIndex + 1] ?? null)
+      : null;
   const projection = calculateFireProjection(
     selectedSnapshot.total,
     fireSettings,
+    {
+      currentSnapshot: selectedSnapshot,
+      previousSnapshot: priorSnapshotForProjection,
+    },
   );
   const currentAge = getCurrentAgeFromDateOfBirth(fireSettings.dateOfBirth);
   const fundedPercent = Math.max(0, projection.fundedRatio * 100);
@@ -127,9 +143,14 @@ export default function FireTracker({
       : projection.requiredMonthlyContribution == null
         ? "Target age requires a savings level outside the planner range."
         : projection.requiredMonthlyContribution <=
-            fireSettings.monthlyContribution
+            (projection.currentMonthlyContribution ?? 0)
           ? `On track for age ${fireSettings.targetFireAge}.`
           : `${formatCurrency(projection.requiredMonthlyContribution)} per month needed to reach age ${fireSettings.targetFireAge}.`;
+  const contributionSummary =
+    priorSnapshotForProjection == null ||
+    projection.currentMonthlyContribution == null
+      ? "Add one earlier net worth month to infer your current liquid savings rate."
+      : `${formatCurrency(projection.currentMonthlyContribution)} per month inferred from ${formatMonthPeriod(priorSnapshotForProjection.year, priorSnapshotForProjection.monthIndex)} to ${selectedMonthLabel}.`;
 
   const cards = [
     {
@@ -149,7 +170,7 @@ export default function FireTracker({
     {
       label: "Time To FIRE",
       value: formatYears(projection.yearsToFire),
-      helper: `${formatCurrency(projection.annualContribution)} added yearly to liquid savings at ${formatPercent(fireSettings.expectedAnnualReturn)} return`,
+      helper: `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
       icon: TrendingUp,
       accent: "from-emerald-500/15 to-teal-500/5 text-emerald-700",
     },
@@ -190,6 +211,8 @@ export default function FireTracker({
   const projectionHighlights =
     retirementProjection?.projection.slice(0, 6) ?? [];
   const latestRetirementBalancePeriod = retirementProjection?.balancePeriod;
+  const projectionStartTotal =
+    retirementProjection?.projection[0]?.totalBalance ?? 0;
 
   return (
     <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -339,8 +362,8 @@ export default function FireTracker({
               Payout phase starts at age{" "}
               {retirementProjection.payoutStartAge ?? "n/a"}. Restricted
               balances stay excluded from usable FIRE assets.
-              {fireSettings.targetFireAge != null
-                ? ` New contributions stop at age ${fireSettings.targetFireAge}.`
+              {fireSettings.retirementContributionStopAge != null
+                ? ` Retirement contributions stop at age ${fireSettings.retirementContributionStopAge}.`
                 : ""}
             </div>
           </section>
@@ -389,7 +412,8 @@ export default function FireTracker({
                         Current retirement balance
                       </p>
                       <p className="mt-3 text-sm text-gray-600">
-                        {formatCurrency(member.projectedBalance)} projected ·{" "}
+                        {formatCurrency(member.projectedBalance)} at end of
+                        timeline ·{" "}
                         {formatCurrency(member.estimatedMonthlyIncome)}/mo
                         income
                       </p>
@@ -418,7 +442,7 @@ export default function FireTracker({
                       <th className="px-4 py-3 font-medium">Class</th>
                       <th className="px-4 py-3 font-medium">Current</th>
                       <th className="px-4 py-3 font-medium">At Payout</th>
-                      <th className="px-4 py-3 font-medium">Projected</th>
+                      <th className="px-4 py-3 font-medium">End Timeline</th>
                       <th className="px-4 py-3 font-medium">Income</th>
                     </tr>
                   </thead>
@@ -506,6 +530,69 @@ export default function FireTracker({
                   </article>
                 ))}
               </div>
+              <details className="border-t border-gray-200 px-4 py-4">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-gray-900">
+                  Show projection math
+                </summary>
+                <p className="mt-3 text-sm text-gray-600">
+                  Each checkpoint starts from{" "}
+                  {formatCurrency(projectionStartTotal)} and adds inferred
+                  liquid savings, modeled retirement contributions, and
+                  cumulative investment growth.
+                </p>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Year</th>
+                        <th className="px-4 py-3 font-medium">Age</th>
+                        <th className="px-4 py-3 font-medium">Liquid Added</th>
+                        <th className="px-4 py-3 font-medium">
+                          Retirement Added
+                        </th>
+                        <th className="px-4 py-3 font-medium">Growth</th>
+                        <th className="px-4 py-3 font-medium">Total</th>
+                        <th className="px-4 py-3 font-medium">FIRE Usable</th>
+                        <th className="px-4 py-3 font-medium">Income</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {retirementProjection.projection.map((point) => (
+                        <tr key={`detail-${point.month}`}>
+                          <td className="px-4 py-3 text-gray-900">
+                            {point.yearOffset.toFixed(0)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {point.age == null ? "n/a" : point.age.toFixed(0)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatCurrency(
+                              point.cumulativeLiquidContributions,
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatCurrency(
+                              point.cumulativeRetirementContributions,
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatCurrency(point.cumulativeInvestmentGrowth)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatCurrency(point.totalBalance)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatCurrency(point.accessibleBalance)}
+                          </td>
+                          <td className="px-4 py-3 text-emerald-700">
+                            {formatCurrency(point.estimatedMonthlyIncome)}/mo
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </section>
           </div>
         </div>

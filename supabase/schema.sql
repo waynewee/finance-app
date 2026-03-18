@@ -359,6 +359,7 @@ create table if not exists public.fire_settings (
   current_age integer,
   date_of_birth date,
   target_fire_age integer,
+  contribution_stop_age integer,
   updated_at timestamptz not null default timezone('utc', now()),
   primary key (user_id, id)
 );
@@ -371,6 +372,9 @@ add column if not exists monthly_income numeric(16, 2) not null default 0;
 
 alter table public.fire_settings
 add column if not exists retirement_system jsonb;
+
+alter table public.fire_settings
+add column if not exists contribution_stop_age integer;
 
 drop trigger if exists fire_settings_set_updated_at on public.fire_settings;
 create trigger fire_settings_set_updated_at

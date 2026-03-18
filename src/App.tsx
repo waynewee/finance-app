@@ -81,6 +81,7 @@ function App() {
     getMonthTotal,
     getCategoryMonthTotal,
     getLatestSnapshot,
+    getNetWorthSnapshots,
     getPreviousSnapshot,
     updateCategories,
     updateFireSettings,
@@ -135,6 +136,7 @@ function App() {
 
   const latestSnapshot = getLatestSnapshot();
   const previousSnapshot = getPreviousSnapshot();
+  const netWorthSnapshots = getNetWorthSnapshots();
   const fireSnapshot =
     fireSnapshotPreference === "previous" && previousSnapshot
       ? previousSnapshot
@@ -490,6 +492,7 @@ function App() {
                     {activeDisplay === "fire" ? (
                       <FireTracker
                         fireSettings={fireSettings}
+                        snapshots={netWorthSnapshots}
                         selectedSnapshot={fireSnapshot}
                         previousSnapshot={previousSnapshot}
                         snapshotPreference={fireSnapshotPreference}
