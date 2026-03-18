@@ -128,6 +128,7 @@ export interface RetirementProjectionOptions {
   currentNetWorth: number;
   monthlyIncome: number;
   currentAge: number | null;
+  contributionStopAge?: number | null;
   liquidMonthlyContribution: number;
   liquidAnnualReturn: number;
   fallbackAnnualWithdrawalRate: number;
@@ -142,6 +143,11 @@ interface ProjectionMemberState {
   name: string;
   monthlyIncome: number;
   currentAge: number | null;
+}
+
+interface StartingBalanceAlignment {
+  balances: Record<string, number>;
+  trackedRetirementBalance: number;
 }
 
 const DEFAULT_PROJECTION_YEARS = 40;
@@ -523,6 +529,57 @@ function buildProjectionMembers(
       currentAge: options.currentAge,
     },
   ];
+}
+
+function alignStartingBalancesToNetWorth(
+  balances: Record<string, number>,
+  currentNetWorth: number,
+): StartingBalanceAlignment {
+  const normalizedNetWorth = clampNumber(currentNetWorth);
+  const normalizedBalances = Object.entries(balances).reduce<
+    Record<string, number>
+  >((result, [accountId, balance]) => {
+    result[accountId] = clampNumber(balance);
+    return result;
+  }, {});
+  const trackedRetirementBalance = Object.values(normalizedBalances).reduce(
+    (sum, balance) => sum + balance,
+    0,
+  );
+
+  if (
+    trackedRetirementBalance <= 0 ||
+    trackedRetirementBalance <= normalizedNetWorth
+  ) {
+    return {
+      balances: normalizedBalances,
+      trackedRetirementBalance,
+    };
+  }
+
+  const scale = normalizedNetWorth / trackedRetirementBalance;
+
+  return {
+    balances: Object.entries(normalizedBalances).reduce<Record<string, number>>(
+      (result, [accountId, balance]) => {
+        result[accountId] = balance * scale;
+        return result;
+      },
+      {},
+    ),
+    trackedRetirementBalance: normalizedNetWorth,
+  };
+}
+
+function shouldApplyContributionAtAge(
+  age: number | null,
+  contributionStopAge: number | null,
+): boolean {
+  if (contributionStopAge == null || age == null) {
+    return true;
+  }
+
+  return age < contributionStopAge;
 }
 
 function applyDirectAllocations(
@@ -1035,21 +1092,24 @@ export function calculateRetirementProjection(
     ),
   );
   const balancePeriod = getLatestRetirementBalancePeriod(system);
-  const startingBalances = getRetirementBalanceMapForPeriod(
+  const rawStartingBalances = getRetirementBalanceMapForPeriod(
     system,
     balancePeriod,
   );
+  const { balances: startingBalances, trackedRetirementBalance } =
+    alignStartingBalancesToNetWorth(
+      rawStartingBalances,
+      options.currentNetWorth,
+    );
   const accountBalances = { ...startingBalances };
-  const trackedRetirementBalance = Object.values(accountBalances).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
   let liquidBalance = Math.max(
-    options.currentNetWorth - trackedRetirementBalance,
+    clampNumber(options.currentNetWorth) - trackedRetirementBalance,
     0,
   );
+  const contributionStopAge = normalizeAge(options.contributionStopAge);
   let monthsToFire: number | null =
-    options.fireNumber != null && options.currentNetWorth >= options.fireNumber
+    options.fireNumber != null &&
+    clampNumber(options.currentNetWorth) >= options.fireNumber
       ? 0
       : null;
   const payoutStartAge =
@@ -1087,9 +1147,13 @@ export function calculateRetirementProjection(
   }
 
   for (let month = 1; month <= projectionMonths; month += 1) {
+    const contributionAge =
+      options.currentAge == null ? null : options.currentAge + (month - 1) / 12;
     liquidBalance =
       liquidBalance * (1 + toMonthlyReturnRate(options.liquidAnnualReturn)) +
-      clampNumber(options.liquidMonthlyContribution);
+      (shouldApplyContributionAtAge(contributionAge, contributionStopAge)
+        ? clampNumber(options.liquidMonthlyContribution)
+        : 0);
 
     system.accounts.forEach((account) => {
       accountBalances[account.id] =
@@ -1100,6 +1164,10 @@ export function calculateRetirementProjection(
     members.forEach((member) => {
       const memberAge =
         member.currentAge == null ? null : member.currentAge + (month - 1) / 12;
+      if (!shouldApplyContributionAtAge(memberAge, contributionStopAge)) {
+        return;
+      }
+
       const rule = getApplicableContributionRule(
         system.contributionRules,
         memberAge == null ? 0 : Math.floor(memberAge),

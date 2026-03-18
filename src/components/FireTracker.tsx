@@ -229,9 +229,11 @@ export default function FireTracker({
       </div>
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        Gross net worth is {formatCurrency(projection.grossNetWorth)}. FIRE
-        progress uses {formatCurrency(projection.accessibleNetWorth)} that is
-        actually liquid or available under the configured withdrawal rules.
+        Gross net worth is {formatCurrency(projection.grossNetWorth)} from your
+        latest recorded net worth. FIRE progress uses{" "}
+        {formatCurrency(projection.accessibleNetWorth)} after excluding
+        retirement balances that are not yet available under the configured
+        withdrawal rules.
       </div>
 
       {retirementProjection ? (
@@ -288,6 +290,9 @@ export default function FireTracker({
               Payout phase starts at age{" "}
               {retirementProjection.payoutStartAge ?? "n/a"}. Restricted
               balances stay excluded from usable FIRE assets.
+              {fireSettings.targetFireAge != null
+                ? ` New contributions stop at age ${fireSettings.targetFireAge}.`
+                : ""}
             </div>
           </section>
 

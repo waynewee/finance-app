@@ -107,6 +107,10 @@ export function calculateFireProjection(
     normalizedSettings.dateOfBirth,
   );
   const annualContribution = normalizedSettings.monthlyContribution * 12;
+  const contributionStopAge =
+    currentAge != null && normalizedSettings.targetFireAge != null
+      ? normalizedSettings.targetFireAge
+      : null;
   const fireNumber =
     normalizedSettings.withdrawalRate > 0
       ? normalizedSettings.annualSpendingGoal /
@@ -118,6 +122,7 @@ export function calculateFireProjection(
         currentNetWorth,
         monthlyIncome: normalizedSettings.monthlyIncome,
         currentAge,
+        contributionStopAge,
         liquidMonthlyContribution: normalizedSettings.monthlyContribution,
         liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
         fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
@@ -212,6 +217,10 @@ export function calculateRequiredMonthlyContribution(
           currentNetWorth,
           monthlyIncome: normalizedSettings.monthlyIncome,
           currentAge: currentAge ?? null,
+          contributionStopAge:
+            currentAge != null && normalizedSettings.targetFireAge != null
+              ? normalizedSettings.targetFireAge
+              : null,
           liquidMonthlyContribution: normalizedSettings.monthlyContribution,
           liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
           fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
@@ -236,6 +245,10 @@ export function calculateRequiredMonthlyContribution(
         currentNetWorth,
         monthlyIncome: normalizedSettings.monthlyIncome,
         currentAge: currentAge ?? null,
+        contributionStopAge:
+          currentAge != null && normalizedSettings.targetFireAge != null
+            ? normalizedSettings.targetFireAge
+            : null,
         liquidMonthlyContribution: monthlyContribution,
         liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
         fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
