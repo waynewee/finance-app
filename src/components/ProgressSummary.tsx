@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
 
@@ -5,6 +6,8 @@ interface Props {
   year: number;
   getMonthTotal: (year: number, monthIndex: number) => number;
 }
+
+type ComparisonMode = "current" | "previous";
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("en-US", {
@@ -51,6 +54,8 @@ function trendTextColor(value: number): string {
 }
 
 export default function ProgressSummary({ year, getMonthTotal }: Props) {
+  const [comparisonMode, setComparisonMode] =
+    useState<ComparisonMode>("current");
   const monthlyTotals = MONTHS.map((_, monthIndex) =>
     getMonthTotal(year, monthIndex),
   );
@@ -73,52 +78,112 @@ export default function ProgressSummary({ year, getMonthTotal }: Props) {
     );
   }
 
-  const latestMonthIndex =
-    populatedMonthIndexes[populatedMonthIndexes.length - 1];
-  const previousMonthIndex =
-    populatedMonthIndexes[populatedMonthIndexes.length - 2] ?? null;
-  const firstMonthIndex = populatedMonthIndexes[0];
+  const anchorMonthPosition =
+    comparisonMode === "current"
+      ? populatedMonthIndexes.length - 1
+      : populatedMonthIndexes.length - 2;
 
-  const latestTotal = monthlyTotals[latestMonthIndex];
-  const previousTotal =
-    previousMonthIndex == null ? null : monthlyTotals[previousMonthIndex];
+  if (anchorMonthPosition < 0) {
+    return (
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Summary basis</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Choose whether the cards use the latest recorded month or the one
+              before it.
+            </p>
+          </div>
+
+          <div className="inline-flex rounded-xl bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setComparisonMode("current")}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                comparisonMode === "current"
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-gray-500 hover:text-indigo-600"
+              }`}
+            >
+              Current month
+            </button>
+            <button
+              type="button"
+              onClick={() => setComparisonMode("previous")}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                comparisonMode === "previous"
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-gray-500 hover:text-indigo-600"
+              }`}
+            >
+              Previous month
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-5 text-sm text-gray-500 shadow-sm">
+          Add another recorded month before switching the summary to the
+          previous month basis.
+        </div>
+      </section>
+    );
+  }
+
+  const anchorMonthIndex = populatedMonthIndexes[anchorMonthPosition];
+  const comparisonMonthIndex =
+    populatedMonthIndexes[anchorMonthPosition - 1] ?? null;
+  const firstMonthIndex = populatedMonthIndexes[0];
+  const includedMonthIndexes = populatedMonthIndexes.slice(
+    0,
+    anchorMonthPosition + 1,
+  );
+
+  const anchorTotal = monthlyTotals[anchorMonthIndex];
+  const comparisonTotal =
+    comparisonMonthIndex == null ? null : monthlyTotals[comparisonMonthIndex];
   const firstTotal = monthlyTotals[firstMonthIndex];
 
   const monthOverMonthChange =
-    previousTotal == null ? 0 : latestTotal - previousTotal;
+    comparisonTotal == null ? 0 : anchorTotal - comparisonTotal;
   const monthOverMonthRate =
-    previousTotal == null || previousTotal === 0
+    comparisonTotal == null || comparisonTotal === 0
       ? null
-      : (monthOverMonthChange / Math.abs(previousTotal)) * 100;
-  const yearToDateChange = latestTotal - firstTotal;
+      : (monthOverMonthChange / Math.abs(comparisonTotal)) * 100;
+  const yearToDateChange = anchorTotal - firstTotal;
   const yearToDateRate =
     firstTotal === 0 ? null : (yearToDateChange / Math.abs(firstTotal)) * 100;
 
   const averageMonthlyChange =
-    populatedMonthIndexes.length < 2
+    includedMonthIndexes.length < 2
       ? 0
-      : populatedMonthIndexes.slice(1).reduce((sum, monthIndex, index) => {
-          const priorMonthIndex = populatedMonthIndexes[index];
+      : includedMonthIndexes.slice(1).reduce((sum, monthIndex, index) => {
+          const priorMonthIndex = includedMonthIndexes[index];
           return (
             sum + (monthlyTotals[monthIndex] - monthlyTotals[priorMonthIndex])
           );
         }, 0) /
-        (populatedMonthIndexes.length - 1);
+        (includedMonthIndexes.length - 1);
 
   const cards = [
     {
-      label: "Latest Net Worth",
-      value: formatCurrency(latestTotal),
-      helper: `Recorded for ${MONTHS[latestMonthIndex]}`,
-      trendValue: latestTotal,
+      label:
+        comparisonMode === "current"
+          ? "Latest Net Worth"
+          : "Selected Month Net Worth",
+      value: formatCurrency(anchorTotal),
+      helper:
+        comparisonMode === "current"
+          ? `Recorded for ${MONTHS[anchorMonthIndex]}`
+          : `Using ${MONTHS[anchorMonthIndex]} as the comparison month`,
+      trendValue: anchorTotal,
     },
     {
       label: "Month-over-Month",
       value: formatSignedCurrency(monthOverMonthChange),
       helper:
-        previousMonthIndex == null
+        comparisonMonthIndex == null
           ? "Add another month to compare"
-          : `${formatPercent(monthOverMonthRate)} vs ${MONTHS[previousMonthIndex]}`,
+          : `${formatPercent(monthOverMonthRate)} vs ${MONTHS[comparisonMonthIndex]}`,
       trendValue: monthOverMonthChange,
     },
     {
@@ -131,32 +196,69 @@ export default function ProgressSummary({ year, getMonthTotal }: Props) {
       label: "Average Monthly Change",
       value: formatSignedCurrency(averageMonthlyChange),
       helper:
-        populatedMonthIndexes.length < 2
+        includedMonthIndexes.length < 2
           ? "Need two months of data"
-          : `Across ${populatedMonthIndexes.length} recorded months`,
+          : `Across ${includedMonthIndexes.length} recorded months`,
       trendValue: averageMonthlyChange,
     },
   ];
 
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {cards.map((card) => (
-        <div
-          key={card.label}
-          className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm"
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-500">{card.label}</p>
-            <TrendIcon value={card.trendValue} />
-          </div>
-          <p
-            className={`text-2xl font-semibold ${trendTextColor(card.trendValue)}`}
-          >
-            {card.value}
+    <section className="space-y-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-700">Summary basis</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Current month uses the latest recorded month. Previous month ignores
+            the newest month so you can compare the last fully closed month.
           </p>
-          <p className="mt-2 text-xs text-gray-500">{card.helper}</p>
         </div>
-      ))}
+
+        <div className="inline-flex rounded-xl bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => setComparisonMode("current")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+              comparisonMode === "current"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-gray-500 hover:text-indigo-600"
+            }`}
+          >
+            Current month
+          </button>
+          <button
+            type="button"
+            onClick={() => setComparisonMode("previous")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+              comparisonMode === "previous"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-gray-500 hover:text-indigo-600"
+            }`}
+          >
+            Previous month
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium text-gray-500">{card.label}</p>
+              <TrendIcon value={card.trendValue} />
+            </div>
+            <p
+              className={`text-2xl font-semibold ${trendTextColor(card.trendValue)}`}
+            >
+              {card.value}
+            </p>
+            <p className="mt-2 text-xs text-gray-500">{card.helper}</p>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
