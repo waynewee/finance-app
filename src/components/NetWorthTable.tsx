@@ -98,6 +98,21 @@ export default function NetWorthTable({
           </tr>
         </thead>
         <tbody>
+          {/* Total row */}
+          <tr className="border-t-2 border-indigo-300 bg-indigo-700 text-white font-bold">
+            <td className="sticky left-0 z-10 bg-indigo-700 px-4 py-3">
+              Net Worth
+            </td>
+            {monthTotals.map((total, i) => (
+              <td key={i} className="px-3 py-3 text-right">
+                {formatNumber(total)}
+              </td>
+            ))}
+            <td className="px-3 py-3 text-right bg-indigo-800">
+              {formatNumber(grandTotal)}
+            </td>
+          </tr>
+
           {categories.map((cat) => {
             const isCollapsed = collapsedCategories.has(cat.id);
             return (
@@ -196,21 +211,6 @@ export default function NetWorthTable({
               </>
             );
           })}
-
-          {/* Total row */}
-          <tr className="border-t-2 border-indigo-300 bg-indigo-700 text-white font-bold">
-            <td className="sticky left-0 z-10 bg-indigo-700 px-4 py-3">
-              Net Worth
-            </td>
-            {monthTotals.map((total, i) => (
-              <td key={i} className="px-3 py-3 text-right">
-                {formatNumber(total)}
-              </td>
-            ))}
-            <td className="px-3 py-3 text-right bg-indigo-800">
-              {formatNumber(grandTotal)}
-            </td>
-          </tr>
         </tbody>
       </table>
     </div>

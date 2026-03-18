@@ -75,6 +75,13 @@ function formatMonthPeriod(year: number, monthIndex: number): string {
   return `${MONTHS[monthIndex]} ${year}`;
 }
 
+function compareSnapshotsDesc(
+  left: LatestSnapshot,
+  right: LatestSnapshot,
+): number {
+  return right.year - left.year || right.monthIndex - left.monthIndex;
+}
+
 function formatAge(value: number | null): string {
   if (value == null || !Number.isFinite(value)) {
     return "n/a";
@@ -122,14 +129,15 @@ export default function FireTracker({
     );
   }
 
-  const selectedSnapshotIndex = snapshots.findIndex(
+  const orderedSnapshots = [...snapshots].sort(compareSnapshotsDesc);
+  const selectedSnapshotIndex = orderedSnapshots.findIndex(
     (snapshot) =>
       snapshot.year === selectedSnapshot.year &&
       snapshot.monthIndex === selectedSnapshot.monthIndex,
   );
   const priorSnapshotsForAverage =
     selectedSnapshotIndex >= 0
-      ? snapshots.slice(
+      ? orderedSnapshots.slice(
           selectedSnapshotIndex + 1,
           selectedSnapshotIndex + 1 + savingsAveragePreference,
         )

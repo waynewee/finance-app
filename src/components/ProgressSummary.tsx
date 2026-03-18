@@ -4,7 +4,11 @@ import { type FireSnapshotPreference } from "../lib/firePreferences";
 
 interface Props {
   year: number;
-  getMonthTotal: (year: number, monthIndex: number) => number;
+  snapshots: Array<{
+    year: number;
+    monthIndex: number;
+    total: number;
+  }>;
   comparisonMode: FireSnapshotPreference;
   onComparisonModeChange: (mode: FireSnapshotPreference) => void;
 }
@@ -27,6 +31,17 @@ function formatPercent(value: number | null): string {
 
 function formatSignedCurrency(value: number): string {
   return `${value >= 0 ? "+" : "-"}${formatCurrency(Math.abs(value))}`;
+}
+
+function formatMonthPeriod(year: number, monthIndex: number): string {
+  return `${MONTHS[monthIndex]} ${year}`;
+}
+
+function compareSnapshotsDesc(
+  left: { year: number; monthIndex: number },
+  right: { year: number; monthIndex: number },
+): number {
+  return right.year - left.year || right.monthIndex - left.monthIndex;
 }
 
 function TrendIcon({ value }: { value: number }) {
@@ -55,38 +70,28 @@ function trendTextColor(value: number): string {
 
 export default function ProgressSummary({
   year,
-  getMonthTotal,
+  snapshots,
   comparisonMode,
   onComparisonModeChange,
 }: Props) {
-  const monthlyTotals = MONTHS.map((_, monthIndex) =>
-    getMonthTotal(year, monthIndex),
-  );
-  const populatedMonthIndexes = monthlyTotals.reduce<number[]>(
-    (result, total, monthIndex) => {
-      if (total !== 0) {
-        result.push(monthIndex);
-      }
-
-      return result;
-    },
-    [],
+  const availableSnapshots = snapshots
+    .filter((snapshot) => snapshot.total !== 0 && snapshot.year <= year)
+    .sort(compareSnapshotsDesc);
+  const hasSelectedYearData = availableSnapshots.some(
+    (snapshot) => snapshot.year === year,
   );
 
-  if (populatedMonthIndexes.length === 0) {
+  if (!hasSelectedYearData) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-5 text-sm text-gray-500 shadow-sm">
-        Add at least two months of values to track your net worth growth.
+        Add at least one recorded month in {year} to track summary changes.
       </div>
     );
   }
 
-  const anchorMonthPosition =
-    comparisonMode === "current"
-      ? populatedMonthIndexes.length - 1
-      : populatedMonthIndexes.length - 2;
+  const anchorMonthPosition = comparisonMode === "current" ? 0 : 1;
 
-  if (anchorMonthPosition < 0) {
+  if (availableSnapshots.length <= anchorMonthPosition) {
     return (
       <section className="space-y-4">
         <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -132,19 +137,17 @@ export default function ProgressSummary({
     );
   }
 
-  const anchorMonthIndex = populatedMonthIndexes[anchorMonthPosition];
-  const comparisonMonthIndex =
-    populatedMonthIndexes[anchorMonthPosition - 1] ?? null;
-  const firstMonthIndex = populatedMonthIndexes[0];
-  const includedMonthIndexes = populatedMonthIndexes.slice(
-    0,
-    anchorMonthPosition + 1,
-  );
+  const anchorSnapshot = availableSnapshots[anchorMonthPosition];
+  const comparisonSnapshot =
+    availableSnapshots[anchorMonthPosition + 1] ?? null;
+  const includedSnapshots = availableSnapshots
+    .slice(anchorMonthPosition)
+    .reverse();
+  const firstSnapshot = includedSnapshots[0];
 
-  const anchorTotal = monthlyTotals[anchorMonthIndex];
-  const comparisonTotal =
-    comparisonMonthIndex == null ? null : monthlyTotals[comparisonMonthIndex];
-  const firstTotal = monthlyTotals[firstMonthIndex];
+  const anchorTotal = anchorSnapshot.total;
+  const comparisonTotal = comparisonSnapshot?.total ?? null;
+  const firstTotal = firstSnapshot.total;
 
   const monthOverMonthChange =
     comparisonTotal == null ? 0 : anchorTotal - comparisonTotal;
@@ -152,20 +155,20 @@ export default function ProgressSummary({
     comparisonTotal == null || comparisonTotal === 0
       ? null
       : (monthOverMonthChange / Math.abs(comparisonTotal)) * 100;
-  const yearToDateChange = anchorTotal - firstTotal;
-  const yearToDateRate =
-    firstTotal === 0 ? null : (yearToDateChange / Math.abs(firstTotal)) * 100;
+  const recordedPeriodChange = anchorTotal - firstTotal;
+  const recordedPeriodRate =
+    firstTotal === 0
+      ? null
+      : (recordedPeriodChange / Math.abs(firstTotal)) * 100;
 
   const averageMonthlyChange =
-    includedMonthIndexes.length < 2
+    includedSnapshots.length < 2
       ? 0
-      : includedMonthIndexes.slice(1).reduce((sum, monthIndex, index) => {
-          const priorMonthIndex = includedMonthIndexes[index];
-          return (
-            sum + (monthlyTotals[monthIndex] - monthlyTotals[priorMonthIndex])
-          );
+      : includedSnapshots.slice(1).reduce((sum, snapshot, index) => {
+          const priorSnapshot = includedSnapshots[index];
+          return sum + (snapshot.total - priorSnapshot.total);
         }, 0) /
-        (includedMonthIndexes.length - 1);
+        (includedSnapshots.length - 1);
 
   const cards = [
     {
@@ -176,32 +179,32 @@ export default function ProgressSummary({
       value: formatCurrency(anchorTotal),
       helper:
         comparisonMode === "current"
-          ? `Recorded for ${MONTHS[anchorMonthIndex]}`
-          : `Using ${MONTHS[anchorMonthIndex]} as the comparison month`,
+          ? `Recorded for ${formatMonthPeriod(anchorSnapshot.year, anchorSnapshot.monthIndex)}`
+          : `Using ${formatMonthPeriod(anchorSnapshot.year, anchorSnapshot.monthIndex)} as the comparison month`,
       trendValue: anchorTotal,
     },
     {
       label: "Month-over-Month",
       value: formatSignedCurrency(monthOverMonthChange),
       helper:
-        comparisonMonthIndex == null
+        comparisonSnapshot == null
           ? "Add another month to compare"
-          : `${formatPercent(monthOverMonthRate)} vs ${MONTHS[comparisonMonthIndex]}`,
+          : `${formatPercent(monthOverMonthRate)} vs ${formatMonthPeriod(comparisonSnapshot.year, comparisonSnapshot.monthIndex)}`,
       trendValue: monthOverMonthChange,
     },
     {
-      label: "Year-to-Date Growth",
-      value: formatSignedCurrency(yearToDateChange),
-      helper: `${formatPercent(yearToDateRate)} since ${MONTHS[firstMonthIndex]}`,
-      trendValue: yearToDateChange,
+      label: "Recorded-Period Growth",
+      value: formatSignedCurrency(recordedPeriodChange),
+      helper: `${formatPercent(recordedPeriodRate)} since ${formatMonthPeriod(firstSnapshot.year, firstSnapshot.monthIndex)}`,
+      trendValue: recordedPeriodChange,
     },
     {
       label: "Average Monthly Change",
       value: formatSignedCurrency(averageMonthlyChange),
       helper:
-        includedMonthIndexes.length < 2
+        includedSnapshots.length < 2
           ? "Need two months of data"
-          : `Across ${includedMonthIndexes.length} recorded months`,
+          : `Across ${includedSnapshots.length} recorded months through ${formatMonthPeriod(anchorSnapshot.year, anchorSnapshot.monthIndex)}`,
       trendValue: averageMonthlyChange,
     },
   ];

@@ -36,7 +36,7 @@ type NetWorthDisplay = "summary" | "fire" | "chart";
 
 function App() {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [tableYear, setTableYear] = useState(currentYear);
   const [showConfig, setShowConfig] = useState(false);
   const [showFireConfig, setShowFireConfig] = useState(false);
   const [showShareAccount, setShowShareAccount] = useState(false);
@@ -78,6 +78,7 @@ function App() {
 
   const {
     categories,
+    monthlyData,
     isLoading,
     error,
     fireSettings,
@@ -152,6 +153,7 @@ function App() {
   const latestSnapshot = getLatestSnapshot();
   const previousSnapshot = getPreviousSnapshot();
   const netWorthSnapshots = getNetWorthSnapshots();
+  const summaryYear = latestSnapshot?.year ?? currentYear;
   const fireSnapshot =
     fireSnapshotPreference === "previous" && previousSnapshot
       ? previousSnapshot
@@ -164,7 +166,7 @@ function App() {
     {
       id: "summary",
       label: "Summary",
-      description: "Key month-to-month and year-to-date changes",
+      description: "Key month-to-month and cross-year trend changes",
     },
     {
       id: "fire",
@@ -302,24 +304,6 @@ function App() {
                   <Users size={15} />
                   Sharing
                 </button>
-
-                <div className="flex items-center gap-1 bg-gray-100 rounded-xl px-1 py-1">
-                  <button
-                    onClick={() => setSelectedYear((y) => y - 1)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm font-semibold text-gray-700 px-3 min-w-16 text-center">
-                    {selectedYear}
-                  </span>
-                  <button
-                    onClick={() => setSelectedYear((y) => y + 1)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
 
                 <button
                   onClick={() => setShowConfig(true)}
@@ -497,8 +481,8 @@ function App() {
 
                     {activeDisplay === "summary" ? (
                       <ProgressSummary
-                        year={selectedYear}
-                        getMonthTotal={getMonthTotal}
+                        year={summaryYear}
+                        snapshots={netWorthSnapshots}
                         comparisonMode={summarySnapshotPreference}
                         onComparisonModeChange={updateSummarySnapshotPreference}
                       />
@@ -524,24 +508,45 @@ function App() {
 
                     {activeDisplay === "chart" ? (
                       <NetWorthChart
-                        year={selectedYear}
                         categories={categories}
+                        monthlyData={monthlyData}
                         getCategoryMonthTotal={getCategoryMonthTotal}
                         getMonthTotal={getMonthTotal}
                       />
                     ) : null}
 
                     <section>
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-base font-semibold text-gray-700">
-                          Monthly Breakdown — {selectedYear}
-                        </h2>
+                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <h2 className="text-base font-semibold text-gray-700">
+                            Monthly Breakdown —
+                          </h2>
+                          <div className="flex items-center gap-1 rounded-xl bg-gray-100 px-1 py-1">
+                            <button
+                              onClick={() => setTableYear((year) => year - 1)}
+                              className="p-1.5 rounded-lg text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all"
+                              aria-label="Previous year"
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+                            <span className="min-w-16 px-3 text-center text-sm font-semibold text-gray-700">
+                              {tableYear}
+                            </span>
+                            <button
+                              onClick={() => setTableYear((year) => year + 1)}
+                              className="p-1.5 rounded-lg text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all"
+                              aria-label="Next year"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                          </div>
+                        </div>
                         <p className="text-xs text-gray-400">
                           Click any cell to edit
                         </p>
                       </div>
                       <NetWorthTable
-                        year={selectedYear}
+                        year={tableYear}
                         categories={categories}
                         getValue={getValue}
                         setValue={setValue}
