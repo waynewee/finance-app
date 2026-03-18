@@ -1,13 +1,13 @@
-import { useState } from "react";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
+import { type FireSnapshotPreference } from "../lib/firePreferences";
 
 interface Props {
   year: number;
   getMonthTotal: (year: number, monthIndex: number) => number;
+  comparisonMode: FireSnapshotPreference;
+  onComparisonModeChange: (mode: FireSnapshotPreference) => void;
 }
-
-type ComparisonMode = "current" | "previous";
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("en-US", {
@@ -53,9 +53,12 @@ function trendTextColor(value: number): string {
   return "text-gray-600";
 }
 
-export default function ProgressSummary({ year, getMonthTotal }: Props) {
-  const [comparisonMode, setComparisonMode] =
-    useState<ComparisonMode>("current");
+export default function ProgressSummary({
+  year,
+  getMonthTotal,
+  comparisonMode,
+  onComparisonModeChange,
+}: Props) {
   const monthlyTotals = MONTHS.map((_, monthIndex) =>
     getMonthTotal(year, monthIndex),
   );
@@ -98,7 +101,7 @@ export default function ProgressSummary({ year, getMonthTotal }: Props) {
           <div className="inline-flex rounded-xl bg-gray-100 p-1">
             <button
               type="button"
-              onClick={() => setComparisonMode("current")}
+              onClick={() => onComparisonModeChange("current")}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                 comparisonMode === "current"
                   ? "bg-white text-indigo-700 shadow-sm"
@@ -109,7 +112,7 @@ export default function ProgressSummary({ year, getMonthTotal }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => setComparisonMode("previous")}
+              onClick={() => onComparisonModeChange("previous")}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                 comparisonMode === "previous"
                   ? "bg-white text-indigo-700 shadow-sm"
@@ -217,7 +220,7 @@ export default function ProgressSummary({ year, getMonthTotal }: Props) {
         <div className="inline-flex rounded-xl bg-gray-100 p-1">
           <button
             type="button"
-            onClick={() => setComparisonMode("current")}
+            onClick={() => onComparisonModeChange("current")}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
               comparisonMode === "current"
                 ? "bg-white text-indigo-700 shadow-sm"
@@ -228,7 +231,7 @@ export default function ProgressSummary({ year, getMonthTotal }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => setComparisonMode("previous")}
+            onClick={() => onComparisonModeChange("previous")}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
               comparisonMode === "previous"
                 ? "bg-white text-indigo-700 shadow-sm"

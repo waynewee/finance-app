@@ -22,7 +22,9 @@ import FireTracker from "./components/FireTracker";
 import ShareAccountModal from "./components/ShareAccountModal";
 import {
   getStoredFireSnapshotPreference,
+  getStoredSummarySnapshotPreference,
   setStoredFireSnapshotPreference,
+  setStoredSummarySnapshotPreference,
   type FireSnapshotPreference,
 } from "./lib/firePreferences";
 
@@ -38,6 +40,8 @@ function App() {
   const [activePage, setActivePage] = useState<AppPage>("net-worth");
   const [activeDisplay, setActiveDisplay] =
     useState<NetWorthDisplay>("summary");
+  const [summarySnapshotPreference, setSummarySnapshotPreference] =
+    useState<FireSnapshotPreference>("current");
   const [fireSnapshotPreference, setFireSnapshotPreference] =
     useState<FireSnapshotPreference>("current");
   const [email, setEmail] = useState("");
@@ -83,8 +87,16 @@ function App() {
   } = useNetWorthData(activeAccountId);
 
   useEffect(() => {
+    setSummarySnapshotPreference(getStoredSummarySnapshotPreference(user?.id));
     setFireSnapshotPreference(getStoredFireSnapshotPreference(user?.id));
   }, [user?.id]);
+
+  const updateSummarySnapshotPreference = (
+    preference: FireSnapshotPreference,
+  ) => {
+    setSummarySnapshotPreference(preference);
+    setStoredSummarySnapshotPreference(user?.id, preference);
+  };
 
   const updateFireSnapshotPreference = (preference: FireSnapshotPreference) => {
     setFireSnapshotPreference(preference);
@@ -470,6 +482,8 @@ function App() {
                       <ProgressSummary
                         year={selectedYear}
                         getMonthTotal={getMonthTotal}
+                        comparisonMode={summarySnapshotPreference}
+                        onComparisonModeChange={updateSummarySnapshotPreference}
                       />
                     ) : null}
 

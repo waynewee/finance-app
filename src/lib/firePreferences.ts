@@ -2,6 +2,8 @@ export type FireSnapshotPreference = "current" | "previous";
 
 const FIRE_SNAPSHOT_PREFERENCE_KEY_PREFIX =
   "finance_app_fire_snapshot_preference";
+const SUMMARY_SNAPSHOT_PREFERENCE_KEY_PREFIX =
+  "finance_app_summary_snapshot_preference";
 
 export function getStoredFireSnapshotPreference(
   scope: string | null | undefined,
@@ -29,10 +31,44 @@ export function setStoredFireSnapshotPreference(
   );
 }
 
+export function getStoredSummarySnapshotPreference(
+  scope: string | null | undefined,
+): FireSnapshotPreference {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return "current";
+  }
+
+  const storageKey = buildSummarySnapshotPreferenceKey(scope);
+  const value = window.localStorage.getItem(storageKey);
+  return value === "previous" ? "previous" : "current";
+}
+
+export function setStoredSummarySnapshotPreference(
+  scope: string | null | undefined,
+  preference: FireSnapshotPreference,
+): void {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    buildSummarySnapshotPreferenceKey(scope),
+    preference,
+  );
+}
+
 function buildFireSnapshotPreferenceKey(
   scope: string | null | undefined,
 ): string {
   return scope
     ? `${FIRE_SNAPSHOT_PREFERENCE_KEY_PREFIX}:${scope}`
     : FIRE_SNAPSHOT_PREFERENCE_KEY_PREFIX;
+}
+
+function buildSummarySnapshotPreferenceKey(
+  scope: string | null | undefined,
+): string {
+  return scope
+    ? `${SUMMARY_SNAPSHOT_PREFERENCE_KEY_PREFIX}:${scope}`
+    : SUMMARY_SNAPSHOT_PREFERENCE_KEY_PREFIX;
 }
