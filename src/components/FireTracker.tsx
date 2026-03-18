@@ -4,6 +4,7 @@ import {
   calculateFireProjection,
   getCurrentAgeFromDateOfBirth,
 } from "../lib/fire";
+import { type FireSnapshotPreference } from "../lib/firePreferences";
 import { type FireSettings } from "../lib/netWorthRepository";
 import type {
   RetirementAccountClassification,
@@ -18,7 +19,10 @@ interface LatestSnapshot {
 
 interface Props {
   fireSettings: FireSettings;
-  latestSnapshot: LatestSnapshot | null;
+  selectedSnapshot: LatestSnapshot | null;
+  previousSnapshot: LatestSnapshot | null;
+  snapshotPreference: FireSnapshotPreference;
+  onSnapshotPreferenceChange: (preference: FireSnapshotPreference) => void;
   onOpenConfig: () => void;
 }
 
@@ -74,10 +78,13 @@ function formatMemberIncome(member: RetirementMemberProjection): string {
 
 export default function FireTracker({
   fireSettings,
-  latestSnapshot,
+  selectedSnapshot,
+  previousSnapshot,
+  snapshotPreference,
+  onSnapshotPreferenceChange,
   onOpenConfig,
 }: Props) {
-  if (!latestSnapshot) {
+  if (!selectedSnapshot) {
     return (
       <section className="rounded-3xl border border-dashed border-amber-300 bg-white px-6 py-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -102,12 +109,18 @@ export default function FireTracker({
   }
 
   const projection = calculateFireProjection(
-    latestSnapshot.total,
+    selectedSnapshot.total,
     fireSettings,
   );
   const currentAge = getCurrentAgeFromDateOfBirth(fireSettings.dateOfBirth);
   const fundedPercent = Math.max(0, projection.fundedRatio * 100);
   const retirementProjection = projection.retirementProjection;
+  const isShowingPreviousMonth =
+    snapshotPreference === "previous" && previousSnapshot != null;
+  const selectedMonthLabel = formatMonthPeriod(
+    selectedSnapshot.year,
+    selectedSnapshot.monthIndex,
+  );
   const targetAgeSummary =
     projection.targetYearsAway == null
       ? "Add your date of birth and target FIRE age in settings."
@@ -187,16 +200,44 @@ export default function FireTracker({
             <h2 className="text-lg font-semibold">FIRE Tracker</h2>
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            Based on your latest recorded net worth from{" "}
-            {MONTHS[latestSnapshot.monthIndex]} {latestSnapshot.year}.
+            Based on your
+            {isShowingPreviousMonth ? " previous " : " current "}
+            recorded net worth from {selectedMonthLabel}.
           </p>
         </div>
-        <button
-          onClick={onOpenConfig}
-          className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
-        >
-          Edit FIRE Settings
-        </button>
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => onSnapshotPreferenceChange("current")}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                snapshotPreference === "current"
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-gray-500 hover:text-indigo-600"
+              }`}
+            >
+              Current month
+            </button>
+            <button
+              type="button"
+              onClick={() => onSnapshotPreferenceChange("previous")}
+              disabled={!previousSnapshot}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                snapshotPreference === "previous"
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-gray-500 hover:text-indigo-600"
+              } ${!previousSnapshot ? "cursor-not-allowed opacity-50 hover:text-gray-500" : ""}`}
+            >
+              Previous month
+            </button>
+          </div>
+          <button
+            onClick={onOpenConfig}
+            className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+          >
+            Edit FIRE Settings
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -230,11 +271,19 @@ export default function FireTracker({
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
         Gross net worth is {formatCurrency(projection.grossNetWorth)} from your
-        latest recorded net worth. FIRE progress uses{" "}
+        selected recorded net worth. FIRE progress uses{" "}
         {formatCurrency(projection.accessibleNetWorth)} after excluding
         retirement balances that are not yet available under the configured
         withdrawal rules.
       </div>
+
+      {snapshotPreference === "previous" && !previousSnapshot ? (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Previous-month FIRE view is saved as your preference, but there is no
+          earlier recorded month yet, so the tracker is using{" "}
+          {selectedMonthLabel}.
+        </div>
+      ) : null}
 
       {retirementProjection ? (
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">

@@ -16,6 +16,45 @@ interface LatestNetWorthSnapshot {
   total: number;
 }
 
+function getSortedSnapshots(
+  monthlyData: MonthlyData,
+): LatestNetWorthSnapshot[] {
+  const snapshots: LatestNetWorthSnapshot[] = [];
+
+  const yearKeys = Object.keys(monthlyData)
+    .map((year) => Number(year))
+    .filter((year) => Number.isFinite(year))
+    .sort((left, right) => right - left);
+
+  yearKeys.forEach((year) => {
+    const months = monthlyData[year];
+    const monthIndexes = Object.keys(months ?? {})
+      .map((month) => Number(month))
+      .filter((month) => Number.isInteger(month) && month >= 0 && month <= 11)
+      .sort((left, right) => right - left);
+
+    monthIndexes.forEach((monthIndex) => {
+      const values = months?.[monthIndex];
+      if (!values) {
+        return;
+      }
+
+      const total = Object.values(values).reduce(
+        (sum, value) => sum + (Number.isFinite(value) ? value : 0),
+        0,
+      );
+
+      snapshots.push({
+        year,
+        monthIndex,
+        total,
+      });
+    });
+  });
+
+  return snapshots;
+}
+
 export function useNetWorthData(accountUserId: string | null) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthlyData>({});
@@ -151,44 +190,11 @@ export function useNetWorthData(accountUserId: string | null) {
   );
 
   const getLatestSnapshot = useCallback((): LatestNetWorthSnapshot | null => {
-    const yearKeys = Object.keys(monthlyData)
-      .map((year) => Number(year))
-      .filter((year) => Number.isFinite(year))
-      .sort((left, right) => left - right);
+    return getSortedSnapshots(monthlyData)[0] ?? null;
+  }, [monthlyData]);
 
-    for (let yearIndex = yearKeys.length - 1; yearIndex >= 0; yearIndex -= 1) {
-      const year = yearKeys[yearIndex];
-      const months = monthlyData[year];
-      const monthIndexes = Object.keys(months ?? {})
-        .map((month) => Number(month))
-        .filter((month) => Number.isInteger(month) && month >= 0 && month <= 11)
-        .sort((left, right) => left - right);
-
-      for (
-        let monthIndexPosition = monthIndexes.length - 1;
-        monthIndexPosition >= 0;
-        monthIndexPosition -= 1
-      ) {
-        const monthIndex = monthIndexes[monthIndexPosition];
-        const values = months?.[monthIndex];
-        if (!values) {
-          continue;
-        }
-
-        const total = Object.values(values).reduce(
-          (sum, value) => sum + (Number.isFinite(value) ? value : 0),
-          0,
-        );
-
-        return {
-          year,
-          monthIndex,
-          total,
-        };
-      }
-    }
-
-    return null;
+  const getPreviousSnapshot = useCallback((): LatestNetWorthSnapshot | null => {
+    return getSortedSnapshots(monthlyData)[1] ?? null;
   }, [monthlyData]);
 
   const updateCategories = useCallback(
@@ -238,6 +244,7 @@ export function useNetWorthData(accountUserId: string | null) {
     getMonthTotal,
     getCategoryMonthTotal,
     getLatestSnapshot,
+    getPreviousSnapshot,
     updateCategories,
     updateFireSettings,
   };

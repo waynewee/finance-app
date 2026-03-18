@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Flame, Plus, Settings2, Target, Trash2, X } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
 import { sanitizeFireSettings } from "../lib/fire";
+import { type FireSnapshotPreference } from "../lib/firePreferences";
 import { type FireSettings } from "../lib/netWorthRepository";
 import {
   CPF_EXAMPLE_RETIREMENT_SYSTEM,
@@ -25,6 +26,9 @@ interface LatestSnapshot {
 interface Props {
   settings: FireSettings;
   latestSnapshot: LatestSnapshot | null;
+  previousSnapshot: LatestSnapshot | null;
+  snapshotPreference: FireSnapshotPreference;
+  onSnapshotPreferenceChange: (preference: FireSnapshotPreference) => void;
   onUpdate: (settings: FireSettings) => void;
   onClose: () => void;
 }
@@ -80,6 +84,9 @@ function formatMonthPeriod(year: number, monthIndex: number): string {
 export default function FireConfigModal({
   settings,
   latestSnapshot,
+  previousSnapshot,
+  snapshotPreference,
+  onSnapshotPreferenceChange,
   onUpdate,
   onClose,
 }: Props) {
@@ -502,6 +509,53 @@ export default function FireConfigModal({
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
               </label>
+
+              <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3">
+                <p className="text-sm font-medium text-gray-700">
+                  FIRE tracker month
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose whether the tracker uses the latest recorded month or
+                  the month before it. This preference is saved on this device.
+                </p>
+                <div className="mt-3 flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => onSnapshotPreferenceChange("current")}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      snapshotPreference === "current"
+                        ? "bg-white text-indigo-700 shadow-sm"
+                        : "text-gray-500 hover:text-indigo-600"
+                    }`}
+                  >
+                    Current month
+                    {latestSnapshot
+                      ? ` (${formatMonthPeriod(latestSnapshot.year, latestSnapshot.monthIndex)})`
+                      : ""}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSnapshotPreferenceChange("previous")}
+                    disabled={!previousSnapshot}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      snapshotPreference === "previous"
+                        ? "bg-white text-indigo-700 shadow-sm"
+                        : "text-gray-500 hover:text-indigo-600"
+                    } ${!previousSnapshot ? "cursor-not-allowed opacity-50 hover:text-gray-500" : ""}`}
+                  >
+                    Previous month
+                    {previousSnapshot
+                      ? ` (${formatMonthPeriod(previousSnapshot.year, previousSnapshot.monthIndex)})`
+                      : ""}
+                  </button>
+                </div>
+                {!previousSnapshot ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Add one more month of net worth history to enable the
+                    previous-month FIRE view.
+                  </p>
+                ) : null}
+              </div>
             </div>
           </section>
 

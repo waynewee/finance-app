@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Calculator,
   LogOut,
@@ -20,6 +20,11 @@ import InvestmentPlannerPage from "./components/InvestmentPlannerPage";
 import FireConfigModal from "./components/FireConfigModal";
 import FireTracker from "./components/FireTracker";
 import ShareAccountModal from "./components/ShareAccountModal";
+import {
+  getStoredFireSnapshotPreference,
+  setStoredFireSnapshotPreference,
+  type FireSnapshotPreference,
+} from "./lib/firePreferences";
 
 type AppPage = "net-worth" | "investment-planner";
 type NetWorthDisplay = "summary" | "fire" | "chart";
@@ -33,6 +38,8 @@ function App() {
   const [activePage, setActivePage] = useState<AppPage>("net-worth");
   const [activeDisplay, setActiveDisplay] =
     useState<NetWorthDisplay>("summary");
+  const [fireSnapshotPreference, setFireSnapshotPreference] =
+    useState<FireSnapshotPreference>("current");
   const [email, setEmail] = useState("");
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isSendingLink, setIsSendingLink] = useState(false);
@@ -70,9 +77,19 @@ function App() {
     getMonthTotal,
     getCategoryMonthTotal,
     getLatestSnapshot,
+    getPreviousSnapshot,
     updateCategories,
     updateFireSettings,
   } = useNetWorthData(activeAccountId);
+
+  useEffect(() => {
+    setFireSnapshotPreference(getStoredFireSnapshotPreference(user?.id));
+  }, [user?.id]);
+
+  const updateFireSnapshotPreference = (preference: FireSnapshotPreference) => {
+    setFireSnapshotPreference(preference);
+    setStoredFireSnapshotPreference(user?.id, preference);
+  };
 
   const handleSendMagicLink = async () => {
     const trimmedEmail = email.trim();
@@ -105,6 +122,11 @@ function App() {
   };
 
   const latestSnapshot = getLatestSnapshot();
+  const previousSnapshot = getPreviousSnapshot();
+  const fireSnapshot =
+    fireSnapshotPreference === "previous" && previousSnapshot
+      ? previousSnapshot
+      : latestSnapshot;
   const displayOptions: Array<{
     id: NetWorthDisplay;
     label: string;
@@ -454,7 +476,12 @@ function App() {
                     {activeDisplay === "fire" ? (
                       <FireTracker
                         fireSettings={fireSettings}
-                        latestSnapshot={latestSnapshot}
+                        selectedSnapshot={fireSnapshot}
+                        previousSnapshot={previousSnapshot}
+                        snapshotPreference={fireSnapshotPreference}
+                        onSnapshotPreferenceChange={
+                          updateFireSnapshotPreference
+                        }
                         onOpenConfig={() => setShowFireConfig(true)}
                       />
                     ) : null}
@@ -511,6 +538,9 @@ function App() {
         <FireConfigModal
           settings={fireSettings}
           latestSnapshot={latestSnapshot}
+          previousSnapshot={previousSnapshot}
+          snapshotPreference={fireSnapshotPreference}
+          onSnapshotPreferenceChange={updateFireSnapshotPreference}
           onUpdate={updateFireSettings}
           onClose={() => setShowFireConfig(false)}
         />
