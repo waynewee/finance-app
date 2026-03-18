@@ -160,6 +160,26 @@ export default function FireConfigModal({
     );
   }, [retirementSystemDraft]);
 
+  const memberCount = useMemo(() => {
+    if (!retirementSystemDraft) {
+      return 0;
+    }
+
+    const memberIds = new Set(
+      (retirementSystemDraft.members ?? [])
+        .map((member) => member.id)
+        .filter((memberId) => memberId.trim().length > 0),
+    );
+
+    retirementSystemDraft.accounts.forEach((account) => {
+      if (account.memberId?.trim()) {
+        memberIds.add(account.memberId.trim());
+      }
+    });
+
+    return memberIds.size;
+  }, [retirementSystemDraft]);
+
   const syncRetirementSystem = (next: RetirementSystemConfig | null) => {
     const sanitized = sanitizeRetirementSystemConfig(next);
     setRetirementSystemDraft(sanitized);
@@ -568,7 +588,7 @@ export default function FireConfigModal({
                         Members
                       </p>
                       <p className="mt-2 text-lg font-semibold text-gray-900">
-                        {retirementSystemDraft.members?.length ?? 0}
+                        {memberCount}
                       </p>
                     </div>
                     <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">

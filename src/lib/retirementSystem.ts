@@ -485,14 +485,34 @@ function buildProjectionMembers(
   system: RetirementSystemConfig,
   options: RetirementProjectionOptions,
 ): ProjectionMemberState[] {
-  const members = system.members ?? [];
-  if (members.length > 0) {
-    return members.map((member) => ({
+  const memberMap = getMemberMap(system);
+  const memberStates = new Map<string, ProjectionMemberState>();
+
+  (system.members ?? []).forEach((member) => {
+    memberStates.set(member.id, {
       id: member.id,
       name: member.name,
       monthlyIncome: clampNumber(member.monthlyIncome ?? 0),
       currentAge: getAgeFromDateOfBirth(member.dateOfBirth),
-    }));
+    });
+  });
+
+  system.accounts.forEach((account) => {
+    const memberId = account.memberId?.trim();
+    if (!memberId || memberStates.has(memberId)) {
+      return;
+    }
+
+    memberStates.set(memberId, {
+      id: memberId,
+      name: resolveMemberName(memberMap, memberId) ?? "Member",
+      monthlyIncome: clampNumber(memberMap.get(memberId)?.monthlyIncome ?? 0),
+      currentAge: getAgeFromDateOfBirth(memberMap.get(memberId)?.dateOfBirth),
+    });
+  });
+
+  if (memberStates.size > 0) {
+    return Array.from(memberStates.values());
   }
 
   return [
@@ -651,8 +671,6 @@ export function sanitizeRetirementSystemConfig(
         }))
         .filter((member) => member.id.length > 0)
     : [];
-  const validMemberIds = new Set(members.map((member) => member.id));
-
   const accounts = Array.isArray(config.accounts)
     ? config.accounts
         .map((account) => ({
@@ -692,15 +710,6 @@ export function sanitizeRetirementSystemConfig(
             : undefined,
         }))
         .filter((account) => account.id.length > 0)
-        .map((account) => ({
-          ...account,
-          memberId:
-            account.memberId == null ||
-            validMemberIds.size === 0 ||
-            validMemberIds.has(account.memberId)
-              ? account.memberId
-              : null,
-        }))
     : [];
 
   const validAccountIds = new Set(accounts.map((account) => account.id));
