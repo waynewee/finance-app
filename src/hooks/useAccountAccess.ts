@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { type User } from "@supabase/supabase-js";
+import { sendMagicLinkEmail } from "../lib/supabase";
 import {
   cancelAccountInvitation,
   claimPendingInvitations,
@@ -19,6 +20,11 @@ interface SharingState {
   collaborators: AccountCollaborator[];
   invitations: AccountInvitation[];
   isLoading: boolean;
+}
+
+interface InviteCollaboratorResult {
+  emailSent: boolean;
+  emailError: string | null;
 }
 
 const ACTIVE_ACCOUNT_STORAGE_KEY = "finance_app_active_account_user_id";
@@ -73,7 +79,7 @@ export function useAccountAccess(user: User | null) {
       (account) => account.userId === storedAccountId,
     )
       ? storedAccountId
-      : nextAccounts[0]?.userId ?? userId;
+      : (nextAccounts[0]?.userId ?? userId);
 
     setAccounts(nextAccounts);
     setActiveAccountId(nextActiveAccountId);
@@ -202,14 +208,34 @@ export function useAccountAccess(user: User | null) {
   );
 
   const inviteCollaborator = useCallback(
-    async (email: string) => {
+    async (email: string): Promise<InviteCollaboratorResult> => {
       if (!userId || activeAccountId !== userId) {
-        return;
+        return {
+          emailSent: false,
+          emailError: "Only the account owner can send collaborator invites.",
+        };
       }
 
       await inviteAccountCollaborator(userId, email);
       await refreshSharing();
       setError(null);
+
+      try {
+        await sendMagicLinkEmail(email);
+
+        return {
+          emailSent: true,
+          emailError: null,
+        };
+      } catch (inviteEmailError) {
+        return {
+          emailSent: false,
+          emailError:
+            inviteEmailError instanceof Error
+              ? inviteEmailError.message
+              : "The sign-in link email could not be sent.",
+        };
+      }
     },
     [activeAccountId, refreshSharing, userId],
   );

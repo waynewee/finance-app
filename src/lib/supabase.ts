@@ -37,3 +37,22 @@ export function getMagicLinkRedirectUrl(): string | undefined {
 
   return `${window.location.origin}${window.location.pathname}`;
 }
+
+export async function sendMagicLinkEmail(email: string): Promise<void> {
+  const normalizedEmail = email.trim();
+
+  if (!normalizedEmail) {
+    throw new Error("Enter an email address to receive a sign-in link.");
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: normalizedEmail,
+    options: {
+      emailRedirectTo: getMagicLinkRedirectUrl(),
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}

@@ -5,6 +5,11 @@ import {
   type AccountInvitation,
 } from "../lib/accountCollaborationRepository";
 
+interface InviteResult {
+  emailSent: boolean;
+  emailError: string | null;
+}
+
 interface Props {
   accountName: string;
   isOwner: boolean;
@@ -12,7 +17,7 @@ interface Props {
   invitations: AccountInvitation[];
   isLoading: boolean;
   onRenameAccount: (accountName: string) => Promise<void>;
-  onInvite: (email: string) => Promise<void>;
+  onInvite: (email: string) => Promise<InviteResult>;
   onRemoveCollaborator: (collaboratorUserId: string) => Promise<void>;
   onCancelInvitation: (invitationId: string) => Promise<void>;
   onClose: () => void;
@@ -71,10 +76,12 @@ export default function ShareAccountModal({
     setBusyKey("invite");
 
     try {
-      await onInvite(inviteEmail);
+      const result = await onInvite(inviteEmail);
       setInviteEmail("");
       setNotice(
-        "Invitation saved. The collaborator can join after signing in with that email.",
+        result.emailSent
+          ? "Invitation saved and sign-in link emailed. The collaborator can open the link to join this shared account."
+          : `Invitation saved, but the sign-in link email could not be sent${result.emailError ? `: ${result.emailError}` : "."} The collaborator can still sign in manually with that email.`,
       );
       setError(null);
     } catch (inviteError) {
@@ -201,8 +208,9 @@ export default function ShareAccountModal({
                     Invite Collaborator
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Enter the email your wife uses to sign in. After she signs
-                    in, the invitation will be claimed automatically.
+                    Enter the collaborator's email to save the invite and send a
+                    sign-in link. After they sign in, the invitation will be
+                    claimed automatically.
                   </p>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -229,7 +237,7 @@ export default function ShareAccountModal({
                       disabled={busyKey === "invite"}
                       className="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
                     >
-                      {busyKey === "invite" ? "Saving..." : "Invite"}
+                      {busyKey === "invite" ? "Sending..." : "Send Invite"}
                     </button>
                   </div>
                 </div>

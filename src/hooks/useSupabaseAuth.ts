@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { type Session, type User } from "@supabase/supabase-js";
-import { getMagicLinkRedirectUrl, supabase } from "../lib/supabase";
+import { sendMagicLinkEmail, supabase } from "../lib/supabase";
 
 export function useSupabaseAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -51,15 +51,14 @@ export function useSupabaseAuth() {
   }, []);
 
   const sendMagicLink = useCallback(async (email: string) => {
-    const { error: signInError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: getMagicLinkRedirectUrl(),
-      },
-    });
-
-    if (signInError) {
-      setError(signInError.message);
+    try {
+      await sendMagicLinkEmail(email);
+    } catch (signInError) {
+      setError(
+        signInError instanceof Error
+          ? signInError.message
+          : "Failed to send the sign-in link.",
+      );
       throw signInError;
     }
 
