@@ -351,6 +351,7 @@ create table if not exists public.fire_settings (
   user_id uuid not null references auth.users (id) on delete cascade,
   id text not null default 'primary',
   annual_spending_goal numeric(16, 2) not null default 60000,
+  pre_fire_annual_spending numeric(16, 2) not null default 0,
   withdrawal_rate numeric(7, 4) not null default 4,
   expected_annual_return numeric(7, 4) not null default 7,
   monthly_contribution numeric(16, 2) not null default 2000,
@@ -359,6 +360,7 @@ create table if not exists public.fire_settings (
   current_age integer,
   date_of_birth date,
   target_fire_age integer,
+  predicted_death_age integer,
   contribution_stop_age integer,
   updated_at timestamptz not null default timezone('utc', now()),
   primary key (user_id, id)
@@ -375,6 +377,30 @@ add column if not exists retirement_system jsonb;
 
 alter table public.fire_settings
 add column if not exists contribution_stop_age integer;
+
+alter table public.fire_settings
+add column if not exists predicted_death_age integer;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'fire_settings'
+      and column_name = 'predicted_death_year'
+  ) then
+    execute '
+      update public.fire_settings
+      set predicted_death_age = coalesce(predicted_death_age, predicted_death_year)
+      where predicted_death_year is not null
+    ';
+  end if;
+end;
+$$;
+
+alter table public.fire_settings
+add column if not exists pre_fire_annual_spending numeric(16, 2) not null default 0;
 
 drop trigger if exists fire_settings_set_updated_at on public.fire_settings;
 create trigger fire_settings_set_updated_at

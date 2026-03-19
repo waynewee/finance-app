@@ -20,8 +20,8 @@ import NetWorthChart from "./components/NetWorthChart";
 import CategoryConfig from "./components/CategoryConfig";
 import ProgressSummary from "./components/ProgressSummary";
 import InvestmentPlannerPage from "./components/InvestmentPlannerPage";
-import FireConfigModal from "./components/FireConfigModal";
 import FireTracker from "./components/FireTracker";
+import RetirementConfigModal from "./components/RetirementConfigModal";
 import ShareAccountModal from "./components/ShareAccountModal";
 import {
   getStoredFireSavingsAveragePreference,
@@ -46,7 +46,7 @@ function App() {
   const currentYear = new Date().getFullYear();
   const [tableYear, setTableYear] = useState(currentYear);
   const [showConfig, setShowConfig] = useState(false);
-  const [showFireConfig, setShowFireConfig] = useState(false);
+  const [showRetirementConfig, setShowRetirementConfig] = useState(false);
   const [showShareAccount, setShowShareAccount] = useState(false);
   const [activePage, setActivePage] = useState<AppPage>("net-worth");
   const [activeDisplay, setActiveDisplay] =
@@ -209,7 +209,7 @@ function App() {
   const handleSignOut = async () => {
     await signOut();
     setShowConfig(false);
-    setShowFireConfig(false);
+    setShowRetirementConfig(false);
     setShowShareAccount(false);
     setActivePage("net-worth");
     setAuthNotice(null);
@@ -440,7 +440,7 @@ function App() {
                     >
                       <span className="flex items-center gap-2">
                         <TrendingUp size={16} />
-                        Net Worth
+                        FIRE Net Worth
                       </span>
                       {activePage === "net-worth" ? (
                         <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#1E7A18]">
@@ -553,7 +553,10 @@ function App() {
                         onSavingsAveragePreferenceChange={
                           updateFireSavingsAveragePreference
                         }
-                        onOpenConfig={() => setShowFireConfig(true)}
+                        onUpdateFireSettings={updateFireSettings}
+                        onOpenRetirementConfig={() =>
+                          setShowRetirementConfig(true)
+                        }
                       />
                     ) : null}
 
@@ -666,17 +669,12 @@ function App() {
         />
       )}
 
-      {showFireConfig && activePage === "net-worth" && (
-        <FireConfigModal
+      {showRetirementConfig && activePage === "net-worth" && (
+        <RetirementConfigModal
           settings={fireSettings}
           latestSnapshot={latestSnapshot}
-          previousSnapshot={previousSnapshot}
-          snapshotPreference={fireSnapshotPreference}
-          savingsAveragePreference={fireSavingsAveragePreference}
-          onSnapshotPreferenceChange={updateFireSnapshotPreference}
-          onSavingsAveragePreferenceChange={updateFireSavingsAveragePreference}
           onUpdate={updateFireSettings}
-          onClose={() => setShowFireConfig(false)}
+          onClose={() => setShowRetirementConfig(false)}
         />
       )}
 

@@ -198,7 +198,7 @@ export default function NetWorthTable({
           {/* Total row */}
           <tr className="border-t-2 border-[#9FD792] bg-[#2CA01C] font-bold text-white">
             <td className="sticky left-0 z-10 bg-[#2CA01C] px-4 py-3">
-              Net Worth
+              FIRE Net Worth
             </td>
             {monthTotals.map((total, i) => (
               <td key={i} className="px-3 py-3 text-right">

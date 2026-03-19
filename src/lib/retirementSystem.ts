@@ -86,6 +86,7 @@ export interface RetirementProjectionPoint {
   cumulativeLiquidContributions: number;
   cumulativeRetirementContributions: number;
   cumulativeInvestmentGrowth: number;
+  cumulativeProjectedSpending: number;
   breakdown: FireLiquidityBreakdown;
   accountBalances: Record<string, number>;
 }
@@ -131,9 +132,13 @@ export interface RetirementProjectionOptions {
   currentNetWorth: number;
   currentAge: number | null;
   contributionStopAge?: number | null;
+  spendingStartAge?: number | null;
   liquidMonthlyContribution: number;
+  preFireMonthlyLiquidInflow?: number;
   liquidAnnualReturn: number;
   fallbackAnnualWithdrawalRate: number;
+  preFireAnnualSpending?: number;
+  annualSpendingGoal?: number;
   fireNumber?: number;
   projectionMonths?: number;
   snapshotFrequencyMonths?: number;
@@ -454,6 +459,7 @@ function createProjectionPoint(
     cumulativeLiquidContributions: number;
     cumulativeRetirementContributions: number;
     cumulativeInvestmentGrowth: number;
+    cumulativeProjectedSpending: number;
   },
 ): RetirementProjectionPoint {
   const breakdown = createBreakdown(
@@ -494,9 +500,82 @@ function createProjectionPoint(
     cumulativeRetirementContributions:
       metrics.cumulativeRetirementContributions,
     cumulativeInvestmentGrowth: metrics.cumulativeInvestmentGrowth,
+    cumulativeProjectedSpending: metrics.cumulativeProjectedSpending,
     breakdown,
     accountBalances,
   };
+}
+
+function withdrawProjectedIncome(
+  system: RetirementSystemConfig,
+  balances: Record<string, number>,
+  age: number | null,
+  fallbackAnnualWithdrawalRate: number,
+): number {
+  let withdrawn = 0;
+
+  system.accounts.forEach((account) => {
+    const balance = clampNumber(balances[account.id] ?? 0);
+    if (balance <= 0) {
+      return;
+    }
+
+    const monthlyIncome = estimateMonthlyIncomeFromBalance(
+      account,
+      balance,
+      age,
+      fallbackAnnualWithdrawalRate,
+      system,
+    );
+    if (monthlyIncome <= 0) {
+      return;
+    }
+
+    const withdrawal = Math.min(monthlyIncome, balance);
+    balances[account.id] = Math.max(balance - withdrawal, 0);
+    withdrawn += withdrawal;
+  });
+
+  return withdrawn;
+}
+
+function withdrawAccessiblePrincipal(
+  system: RetirementSystemConfig,
+  balances: Record<string, number>,
+  age: number | null,
+  amount: number,
+): number {
+  let remaining = clampNumber(amount);
+  if (remaining <= 0) {
+    return 0;
+  }
+
+  for (const account of system.accounts) {
+    if (remaining <= 0) {
+      break;
+    }
+
+    if (
+      !isAccessibleBalance(
+        account.classification,
+        age,
+        normalizeAge(account.withdrawal?.minimumAge),
+      )
+    ) {
+      continue;
+    }
+
+    const balance = clampNumber(balances[account.id] ?? 0);
+    if (balance <= 0) {
+      continue;
+    }
+
+    const withdrawal = Math.min(remaining, balance);
+    balances[account.id] = Math.max(balance - withdrawal, 0);
+    remaining -= withdrawal;
+  }
+
+  return clampNumber(amount) - remaining;
 }
 
 function buildProjectionMembers(
@@ -1161,6 +1240,21 @@ export function calculateRetirementProjection(
     0,
   );
   const contributionStopAge = normalizeAge(options.contributionStopAge);
+  const spendingStartAge = normalizeAge(options.spendingStartAge);
+  const preFireMonthlySpendingTarget =
+    clampNumber(options.preFireAnnualSpending ?? 0) / 12;
+  const monthlySpendingTarget =
+    clampNumber(options.annualSpendingGoal ?? 0) / 12;
+  const normalizedLiquidMonthlyContribution = Number.isFinite(
+    options.liquidMonthlyContribution,
+  )
+    ? options.liquidMonthlyContribution
+    : 0;
+  const normalizedPreFireMonthlyLiquidInflow = Number.isFinite(
+    options.preFireMonthlyLiquidInflow,
+  )
+    ? (options.preFireMonthlyLiquidInflow ?? 0)
+    : normalizedLiquidMonthlyContribution + preFireMonthlySpendingTarget;
   let monthsToFire: number | null =
     options.fireNumber != null &&
     clampNumber(options.currentNetWorth) >= options.fireNumber
@@ -1184,6 +1278,7 @@ export function calculateRetirementProjection(
   let cumulativeLiquidContributions = 0;
   let cumulativeRetirementContributions = 0;
   let cumulativeInvestmentGrowth = 0;
+  let cumulativeProjectedSpending = 0;
 
   const initialPoint = createProjectionPoint(
     0,
@@ -1196,6 +1291,7 @@ export function calculateRetirementProjection(
       cumulativeLiquidContributions,
       cumulativeRetirementContributions,
       cumulativeInvestmentGrowth,
+      cumulativeProjectedSpending,
     },
   );
   const projection: RetirementProjectionPoint[] = [initialPoint];
@@ -1211,18 +1307,30 @@ export function calculateRetirementProjection(
   for (let month = 1; month <= projectionMonths; month += 1) {
     const contributionAge =
       options.currentAge == null ? null : options.currentAge + (month - 1) / 12;
+    const snapshotAge =
+      options.currentAge == null ? null : options.currentAge + month / 12;
+    const isDrawdownPhase =
+      (spendingStartAge != null &&
+        snapshotAge != null &&
+        snapshotAge >= spendingStartAge) ||
+      (spendingStartAge == null &&
+        monthsToFire != null &&
+        month > monthsToFire);
     const totalBefore = liquidBalance + sumBalances(accountBalances);
     const liquidContribution = shouldApplyContributionAtAge(
       contributionAge,
       contributionStopAge,
     )
-      ? Number.isFinite(options.liquidMonthlyContribution)
-        ? options.liquidMonthlyContribution
-        : 0
+      ? normalizedLiquidMonthlyContribution
       : 0;
+    const liquidInflow =
+      !isDrawdownPhase &&
+      shouldApplyContributionAtAge(contributionAge, contributionStopAge)
+        ? normalizedPreFireMonthlyLiquidInflow
+        : liquidContribution;
     liquidBalance =
       liquidBalance * (1 + toMonthlyReturnRate(options.liquidAnnualReturn)) +
-      liquidContribution;
+      liquidInflow;
 
     system.accounts.forEach((account) => {
       accountBalances[account.id] =
@@ -1287,8 +1395,8 @@ export function calculateRetirementProjection(
     );
     const totalAfter = liquidBalance + sumBalances(accountBalances);
     const investmentGrowth =
-      totalAfter - totalBefore - liquidContribution - retirementContribution;
-    cumulativeLiquidContributions += liquidContribution;
+      totalAfter - totalBefore - liquidInflow - retirementContribution;
+    cumulativeLiquidContributions += liquidInflow;
     cumulativeRetirementContributions += retirementContribution;
     cumulativeInvestmentGrowth += investmentGrowth;
 
@@ -1296,8 +1404,71 @@ export function calculateRetirementProjection(
       yearToDateContribution.clear();
     }
 
-    const snapshotAge =
-      options.currentAge == null ? null : options.currentAge + month / 12;
+    if (!isDrawdownPhase && preFireMonthlySpendingTarget > 0) {
+      let projectedSpending = 0;
+
+      if (liquidBalance > 0) {
+        const liquidWithdrawal = Math.min(
+          preFireMonthlySpendingTarget,
+          liquidBalance,
+        );
+        liquidBalance = Math.max(liquidBalance - liquidWithdrawal, 0);
+        projectedSpending += liquidWithdrawal;
+      }
+
+      const remainingAfterLiquid = Math.max(
+        preFireMonthlySpendingTarget - projectedSpending,
+        0,
+      );
+
+      if (remainingAfterLiquid > 0) {
+        projectedSpending += withdrawAccessiblePrincipal(
+          system,
+          accountBalances,
+          snapshotAge,
+          remainingAfterLiquid,
+        );
+      }
+
+      cumulativeProjectedSpending += projectedSpending;
+    }
+
+    if (isDrawdownPhase && monthlySpendingTarget > 0) {
+      const incomeWithdrawal = withdrawProjectedIncome(
+        system,
+        accountBalances,
+        snapshotAge,
+        options.fallbackAnnualWithdrawalRate,
+      );
+      let projectedSpending = incomeWithdrawal;
+      const remainingAfterIncome = Math.max(
+        monthlySpendingTarget - projectedSpending,
+        0,
+      );
+
+      if (remainingAfterIncome > 0 && liquidBalance > 0) {
+        const liquidWithdrawal = Math.min(remainingAfterIncome, liquidBalance);
+        liquidBalance = Math.max(liquidBalance - liquidWithdrawal, 0);
+        projectedSpending += liquidWithdrawal;
+      }
+
+      const remainingAfterLiquid = Math.max(
+        monthlySpendingTarget - projectedSpending,
+        0,
+      );
+
+      if (remainingAfterLiquid > 0) {
+        projectedSpending += withdrawAccessiblePrincipal(
+          system,
+          accountBalances,
+          snapshotAge,
+          remainingAfterLiquid,
+        );
+      }
+
+      cumulativeProjectedSpending += projectedSpending;
+    }
+
     const point = createProjectionPoint(
       month,
       snapshotAge,
@@ -1309,6 +1480,7 @@ export function calculateRetirementProjection(
         cumulativeLiquidContributions,
         cumulativeRetirementContributions,
         cumulativeInvestmentGrowth,
+        cumulativeProjectedSpending,
       },
     );
 
@@ -1371,18 +1543,18 @@ export const CPF_EXAMPLE_RETIREMENT_SYSTEM: RetirementSystemConfig = {
   projectionYears: 40,
   members: [
     {
-      id: "alex",
-      name: "Alex",
+      id: "wayne",
+      name: "Wayne",
       monthlyIncome: 6200,
       dateOfBirth: "1990-01-01",
     },
   ],
   balanceHistory: [
-    { year: 2026, monthIndex: 1, accountId: "alex-oa", balance: 120000 },
-    { year: 2026, monthIndex: 1, accountId: "alex-sa", balance: 90000 },
-    { year: 2026, monthIndex: 1, accountId: "alex-ma", balance: 55000 },
+    { year: 2026, monthIndex: 1, accountId: "wayne-oa", balance: 120000 },
+    { year: 2026, monthIndex: 1, accountId: "wayne-sa", balance: 90000 },
+    { year: 2026, monthIndex: 1, accountId: "wayne-ma", balance: 55000 },
   ],
-  accounts: createCpfMemberAccounts("alex", "Alex"),
+  accounts: createCpfMemberAccounts("wayne", "Wayne"),
   contributionRules: [
     {
       maxAge: 35,

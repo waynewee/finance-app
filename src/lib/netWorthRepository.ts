@@ -4,20 +4,24 @@ import { supabase } from "./supabase";
 
 export interface FireSettings {
   annualSpendingGoal: number;
+  preFireAnnualSpending: number;
   withdrawalRate: number;
   expectedAnnualReturn: number;
   dateOfBirth: string | null;
   targetFireAge: number | null;
+  predictedDeathAge: number | null;
   retirementContributionStopAge: number | null;
   retirementSystem: RetirementSystemConfig | null;
 }
 
 export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   annualSpendingGoal: 60_000,
+  preFireAnnualSpending: 0,
   withdrawalRate: 4,
   expectedAnnualReturn: 7,
   dateOfBirth: null,
   targetFireAge: null,
+  predictedDeathAge: null,
   retirementContributionStopAge: null,
   retirementSystem: null,
 };
@@ -55,6 +59,7 @@ interface FireSettingsRow {
   user_id: string;
   id: string;
   annual_spending_goal: number;
+  pre_fire_annual_spending?: number | null;
   withdrawal_rate: number;
   expected_annual_return: number;
   monthly_contribution: number;
@@ -63,6 +68,7 @@ interface FireSettingsRow {
   current_age?: number | null;
   date_of_birth?: string | null;
   target_fire_age: number | null;
+  predicted_death_age?: number | null;
   contribution_stop_age?: number | null;
   updated_at: string;
 }
@@ -87,11 +93,13 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
 
   return {
     annualSpendingGoal: row.annual_spending_goal,
+    preFireAnnualSpending: row.pre_fire_annual_spending ?? 0,
     withdrawalRate: row.withdrawal_rate,
     expectedAnnualReturn: row.expected_annual_return,
     dateOfBirth:
       row.date_of_birth ?? inferDateOfBirthFromCurrentAge(row.current_age),
     targetFireAge: row.target_fire_age,
+    predictedDeathAge: row.predicted_death_age ?? null,
     retirementContributionStopAge:
       row.contribution_stop_age ?? row.target_fire_age,
     retirementSystem: row.retirement_system ?? null,
@@ -106,6 +114,7 @@ function mapFireSettingsToRow(
     user_id: userId,
     id: FIRE_SETTINGS_ROW_ID,
     annual_spending_goal: settings.annualSpendingGoal,
+    pre_fire_annual_spending: settings.preFireAnnualSpending,
     withdrawal_rate: settings.withdrawalRate,
     expected_annual_return: settings.expectedAnnualReturn,
     monthly_contribution: 0,
@@ -114,6 +123,7 @@ function mapFireSettingsToRow(
     current_age: null,
     date_of_birth: settings.dateOfBirth,
     target_fire_age: settings.targetFireAge,
+    predicted_death_age: settings.predictedDeathAge,
     contribution_stop_age: settings.retirementContributionStopAge,
     updated_at: new Date().toISOString(),
   };
@@ -189,7 +199,7 @@ export async function loadNetWorthState(userId: string): Promise<{
     supabase
       .from("fire_settings")
       .select(
-        "user_id, id, annual_spending_goal, withdrawal_rate, expected_annual_return, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, updated_at",
+        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
       )
       .eq("user_id", userId),
   ]);

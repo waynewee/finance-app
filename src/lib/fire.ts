@@ -110,6 +110,58 @@ function inferMonthlyContributionFromModeledDelta(
   return Number.isFinite(inferred) ? inferred : null;
 }
 
+function getProjectionReferencePeriod(
+  snapshot?: FireProjectionSnapshot | null,
+): RetirementBalancePeriod {
+  if (snapshot) {
+    return snapshot;
+  }
+
+  const now = new Date();
+  return {
+    year: now.getFullYear(),
+    monthIndex: now.getMonth(),
+  };
+}
+
+function getProjectionReferenceDate(
+  snapshot?: FireProjectionSnapshot | null,
+): Date {
+  const period = getProjectionReferencePeriod(snapshot);
+  return new Date(period.year, period.monthIndex + 1, 0);
+}
+
+function getProjectionMonthLimit(
+  dateOfBirth: string | null,
+  predictedDeathAge: number | null,
+  referenceDate: Date,
+): number {
+  if (predictedDeathAge == null || !isValidDateOfBirth(dateOfBirth)) {
+    return MAX_PROJECTION_MONTHS;
+  }
+
+  const birthDate = new Date(dateOfBirth);
+  const targetDate = new Date(
+    birthDate.getFullYear() + predictedDeathAge,
+    birthDate.getMonth(),
+    birthDate.getDate(),
+  );
+
+  if (targetDate <= referenceDate) {
+    return 0;
+  }
+
+  let monthsUntilTarget =
+    (targetDate.getFullYear() - referenceDate.getFullYear()) * 12 +
+    (targetDate.getMonth() - referenceDate.getMonth());
+
+  if (targetDate.getDate() < referenceDate.getDate()) {
+    monthsUntilTarget -= 1;
+  }
+
+  return Math.max(0, Math.min(MAX_PROJECTION_MONTHS, monthsUntilTarget));
+}
+
 export function getCurrentAgeFromDateOfBirth(
   dateOfBirth: string | null,
   now: Date = new Date(),
@@ -135,6 +187,7 @@ export function getCurrentAgeFromDateOfBirth(
 export function sanitizeFireSettings(settings: FireSettings): FireSettings {
   return {
     annualSpendingGoal: Math.max(0, settings.annualSpendingGoal),
+    preFireAnnualSpending: Math.max(0, settings.preFireAnnualSpending),
     withdrawalRate: Math.max(0.1, settings.withdrawalRate),
     expectedAnnualReturn: settings.expectedAnnualReturn,
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
@@ -144,6 +197,10 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
       settings.targetFireAge == null || settings.targetFireAge <= 0
         ? null
         : settings.targetFireAge,
+    predictedDeathAge:
+      settings.predictedDeathAge == null || settings.predictedDeathAge <= 0
+        ? null
+        : Math.round(settings.predictedDeathAge),
     retirementContributionStopAge:
       settings.retirementContributionStopAge == null ||
       settings.retirementContributionStopAge <= 0
@@ -179,23 +236,35 @@ export function calculateFireProjection(
       ? normalizedSettings.annualSpendingGoal /
         (normalizedSettings.withdrawalRate / 100)
       : Number.POSITIVE_INFINITY;
+  const projectionMonthLimit = getProjectionMonthLimit(
+    normalizedSettings.dateOfBirth,
+    normalizedSettings.predictedDeathAge,
+    getProjectionReferenceDate(snapshots?.currentSnapshot),
+  );
   const retirementSystem = normalizedSettings.retirementSystem;
   const currentMonthlyContribution = inferMonthlyLiquidContribution(
     normalizedSettings,
     snapshots?.currentSnapshot ?? null,
     snapshots?.previousSnapshots ?? [],
   );
+  const preFireMonthlySpending = normalizedSettings.preFireAnnualSpending / 12;
+  const preFireMonthlyLiquidInflow =
+    (currentMonthlyContribution ?? 0) + preFireMonthlySpending;
   const annualContribution = (currentMonthlyContribution ?? 0) * 12;
   const retirementProjection = retirementSystem
     ? calculateRetirementProjection({
         currentNetWorth,
         currentAge,
         contributionStopAge: normalizedSettings.retirementContributionStopAge,
+        spendingStartAge: normalizedSettings.targetFireAge,
         liquidMonthlyContribution: currentMonthlyContribution ?? 0,
+        preFireMonthlyLiquidInflow,
         liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
         fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
+        preFireAnnualSpending: normalizedSettings.preFireAnnualSpending,
+        annualSpendingGoal: normalizedSettings.annualSpendingGoal,
         fireNumber,
-        projectionMonths: MAX_PROJECTION_MONTHS,
+        projectionMonths: projectionMonthLimit,
         system: retirementSystem,
       })
     : null;
@@ -212,6 +281,7 @@ export function calculateFireProjection(
       fireNumber,
       currentMonthlyContribution ?? 0,
       normalizedSettings.expectedAnnualReturn,
+      projectionMonthLimit,
     );
   const targetYearsAway =
     currentAge != null &&
@@ -329,8 +399,10 @@ function inferMonthlyLiquidContributionForInterval(
     currentAge: previousAge,
     contributionStopAge: normalizedSettings.retirementContributionStopAge,
     liquidMonthlyContribution: 0,
+    preFireMonthlyLiquidInflow: normalizedSettings.preFireAnnualSpending / 12,
     liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
     fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
+    preFireAnnualSpending: normalizedSettings.preFireAnnualSpending,
     projectionMonths: monthsBetween,
     snapshotFrequencyMonths: monthsBetween,
     startingBalancePeriod: previousSnapshot,
@@ -352,6 +424,7 @@ export function calculateMonthsToFire(
   fireNumber: number,
   monthlyContribution: number,
   expectedAnnualReturn: number,
+  maxProjectionMonths = MAX_PROJECTION_MONTHS,
 ): number | null {
   if (currentNetWorth >= fireNumber) {
     return 0;
@@ -360,7 +433,7 @@ export function calculateMonthsToFire(
   const monthlyReturnRate = toMonthlyReturnRate(expectedAnnualReturn);
   let balance = currentNetWorth;
 
-  for (let month = 1; month <= MAX_PROJECTION_MONTHS; month += 1) {
+  for (let month = 1; month <= maxProjectionMonths; month += 1) {
     balance = balance * (1 + monthlyReturnRate) + monthlyContribution;
     if (balance >= fireNumber) {
       return month;
@@ -387,9 +460,14 @@ export function calculateRequiredMonthlyContribution(
           currentNetWorth,
           currentAge: currentAge ?? null,
           contributionStopAge: normalizedSettings.retirementContributionStopAge,
+          spendingStartAge: normalizedSettings.targetFireAge,
           liquidMonthlyContribution: 0,
+          preFireMonthlyLiquidInflow:
+            normalizedSettings.preFireAnnualSpending / 12,
           liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
           fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
+          preFireAnnualSpending: normalizedSettings.preFireAnnualSpending,
+          annualSpendingGoal: normalizedSettings.annualSpendingGoal,
           projectionMonths: 0,
           system: retirementSystem,
         }).breakdown.accessibleNow
@@ -411,9 +489,14 @@ export function calculateRequiredMonthlyContribution(
         currentNetWorth,
         currentAge: currentAge ?? null,
         contributionStopAge: normalizedSettings.retirementContributionStopAge,
+        spendingStartAge: normalizedSettings.targetFireAge,
         liquidMonthlyContribution: monthlyContribution,
+        preFireMonthlyLiquidInflow:
+          monthlyContribution + normalizedSettings.preFireAnnualSpending / 12,
         liquidAnnualReturn: normalizedSettings.expectedAnnualReturn,
         fallbackAnnualWithdrawalRate: normalizedSettings.withdrawalRate,
+        preFireAnnualSpending: normalizedSettings.preFireAnnualSpending,
+        annualSpendingGoal: normalizedSettings.annualSpendingGoal,
         projectionMonths: months,
         fireNumber,
         system: retirementSystem,
