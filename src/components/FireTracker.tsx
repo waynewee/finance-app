@@ -212,7 +212,7 @@ export default function FireTracker({
       hasSavingsAverageToggle: true,
     },
     {
-      label: "Target Age Plan",
+      label: "Monthly Savings to FIRE",
       value:
         projection.requiredMonthlyContribution == null
           ? "Set age target"
