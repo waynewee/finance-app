@@ -151,12 +151,6 @@ function App() {
     setCsvNotice(`Exported ${tableYear} net worth table as CSV.`);
   };
 
-  const handleDownloadTemplate = () => {
-    const csv = buildYearTemplateCsv(categories);
-    downloadCsvFile(`net-worth-template-${tableYear}.csv`, csv);
-    setCsvNotice(`Downloaded a CSV template for ${tableYear}.`);
-  };
-
   const handleImportCsv = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -596,13 +590,6 @@ function App() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            onClick={handleDownloadTemplate}
-                            className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
-                          >
-                            <Download size={15} />
-                            Template CSV
-                          </button>
                           <button
                             onClick={handleExportCsv}
                             className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"

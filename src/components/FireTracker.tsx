@@ -822,7 +822,7 @@ export default function FireTracker({
           {retirementProjection ? (
             <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
               <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">
                       Retirement System
@@ -841,7 +841,7 @@ export default function FireTracker({
                       </p>
                     ) : null}
                   </div>
-                  <div className="rounded-2xl bg-white px-3 py-2 text-right shadow-sm">
+                  <div className="w-full rounded-2xl bg-white px-3 py-2 text-left shadow-sm sm:w-auto sm:text-right">
                     <p className="text-xs uppercase tracking-wide text-gray-400">
                       Est. income
                     </p>
@@ -901,13 +901,13 @@ export default function FireTracker({
                         and then rolled up into household FIRE progress.
                       </p>
                     </div>
-                    <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                       {retirementProjection.memberProjections.map((member) => (
                         <article
                           key={member.id}
                           className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <p className="font-semibold text-gray-900">
                                 {member.name}
@@ -917,7 +917,7 @@ export default function FireTracker({
                                 {formatMemberIncome(member)}/mo
                               </p>
                             </div>
-                            <div className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-right">
+                            <div className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-left sm:w-auto sm:text-right">
                               <p className="text-xs uppercase tracking-wide text-gray-400">
                                 Income
                               </p>
@@ -954,7 +954,70 @@ export default function FireTracker({
                       projections by configured account.
                     </p>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="space-y-3 p-4 md:hidden">
+                    {retirementProjection.accountProjections.map((account) => (
+                      <article
+                        key={account.id}
+                        className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                      >
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {account.name}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
+                              {account.memberName ?? "Household"} · {formatClassification(account.classification)}
+                            </p>
+                            <p className="mt-2 text-xs text-gray-500">
+                              {formatPercent(account.annualReturnRate)} return
+                              {account.minimumWithdrawalAge != null
+                                ? ` · age ${account.minimumWithdrawalAge}+`
+                                : ""}
+                            </p>
+                          </div>
+                          <dl className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Current
+                              </dt>
+                              <dd className="mt-1 font-semibold text-gray-900">
+                                {formatCurrency(account.currentBalance)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                At payout
+                              </dt>
+                              <dd className="mt-1 font-semibold text-gray-900">
+                                {account.projectedBalanceAtPayout == null
+                                  ? "n/a"
+                                  : formatCurrency(account.projectedBalanceAtPayout)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                End timeline
+                              </dt>
+                              <dd className="mt-1 font-semibold text-gray-900">
+                                {formatCurrency(account.projectedBalance)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Income
+                              </dt>
+                              <dd className="mt-1 font-semibold text-green-700">
+                                {account.estimatedMonthlyIncome > 0
+                                  ? `${formatCurrency(account.estimatedMonthlyIncome)}/mo`
+                                  : "n/a"}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
                       <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
                         <tr>
@@ -1032,13 +1095,13 @@ export default function FireTracker({
                   </div>
                   {projectionHighlights.length > 0 && selectedSnapshot ? (
                     <>
-                      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                         {projectionHighlights.map((point, index) => (
                           <article
                             key={point.month}
                             className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
                           >
-                            <div className="flex items-center justify-between gap-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="text-sm font-semibold text-gray-900">
                                   {index === 0
@@ -1082,7 +1145,84 @@ export default function FireTracker({
                           This table only shows the drawdown phase, when projected
                           spending is actually being deducted.
                         </p>
-                        <div className="mt-4 max-h-[800px] overflow-auto rounded-xl border border-gray-200">
+                        <div className="mt-4 space-y-3 lg:hidden">
+                          {projectionMathRows.map((row) => (
+                            <article
+                              key={`detail-mobile-${row.point.month}`}
+                              className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {row.point.age == null
+                                      ? "Age n/a"
+                                      : `Age ${row.point.age.toFixed(0)}`}
+                                  </p>
+                                  <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
+                                    {formatCurrency(row.point.totalBalance)} total
+                                  </p>
+                                </div>
+                                <p className="text-sm font-semibold text-orange-700">
+                                  {formatCurrency(row.point.estimatedMonthlyIncome)}/mo
+                                </p>
+                              </div>
+                              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                    Liquid added
+                                  </dt>
+                                  <dd className="mt-1 font-medium text-gray-900">
+                                    {formatSignedCurrency(row.liquidChange)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                    Retirement added
+                                  </dt>
+                                  <dd className="mt-1 font-medium text-gray-900">
+                                    {formatSignedCurrency(row.retirementChange)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                    Growth
+                                  </dt>
+                                  <dd className="mt-1 font-medium text-gray-900">
+                                    {formatSignedCurrency(row.growthChange)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                    Expenses
+                                  </dt>
+                                  <dd className="mt-1 font-medium text-gray-900">
+                                    {formatNegativeCurrency(row.expenseChange)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                    FIRE usable
+                                  </dt>
+                                  <dd className="mt-1 font-medium text-gray-900">
+                                    {formatCurrency(row.point.accessibleBalance)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                    Calendar year
+                                  </dt>
+                                  <dd className="mt-1 font-medium text-gray-900">
+                                    {getProjectionCalendarYear(
+                                      selectedSnapshot,
+                                      row.point.month,
+                                    )}
+                                  </dd>
+                                </div>
+                              </dl>
+                            </article>
+                          ))}
+                        </div>
+                        <div className="mt-4 hidden max-h-[800px] overflow-auto rounded-xl border border-gray-200 lg:block">
                           <table className="min-w-full divide-y divide-gray-200 text-sm">
                             <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
                               <tr>
