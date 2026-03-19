@@ -335,14 +335,14 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                 step="0.01"
                 value={monthlyBudget}
                 onChange={(event) => setMonthlyBudget(event.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
               />
             </label>
 
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#2CA01C] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#248814] disabled:cursor-not-allowed disabled:bg-[#9FD792]"
             >
               <Save size={16} />
               {isSaving ? "Saving..." : "Save asset plan"}
@@ -506,7 +506,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                             )
                           }
                           placeholder="VOO"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                         />
                       </td>
                       <td className="align-top px-3 py-2">
@@ -516,7 +516,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                             updateAsset(asset.id, "name", event.target.value)
                           }
                           placeholder="S&P 500 ETF"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                         />
                       </td>
                       <td className="align-top px-3 py-2">
@@ -532,7 +532,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                               event.target.value,
                             )
                           }
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                         />
                       </td>
                       <td className="align-top px-3 py-2">
@@ -549,12 +549,12 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                                 event.target.value,
                               )
                             }
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                           />
                           <button
                             onClick={() => void refreshPrices([asset.id])}
                             title="Refresh this asset price"
-                            className="rounded-lg border border-gray-300 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-indigo-600"
+                            className="rounded-lg border border-gray-300 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#1E7A18]"
                           >
                             <RefreshCw size={14} />
                           </button>
@@ -584,7 +584,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                                 event.target.value,
                               )
                             }
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                           />
                         </div>
                         <div className="mt-1 flex justify-end gap-1">
@@ -619,7 +619,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                           {formatCurrency(asset.plannedAmount)}
                         </div>
                       </td>
-                      <td className="align-top px-3 py-2 text-right font-medium text-indigo-700">
+                      <td className="align-top px-3 py-2 text-right font-medium text-[#1E7A18]">
                         <div className="px-3 py-2">
                           {formatShares(asset.plannedShares)}
                         </div>

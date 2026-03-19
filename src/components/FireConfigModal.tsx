@@ -393,7 +393,7 @@ export default function FireConfigModal({
                       annualSpendingGoal: parseNumber(event.target.value),
                     }))
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
               </label>
 
@@ -412,7 +412,7 @@ export default function FireConfigModal({
                       withdrawalRate: parseNumber(event.target.value),
                     }))
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
               </label>
 
@@ -430,20 +430,20 @@ export default function FireConfigModal({
                       expectedAnnualReturn: parseNumber(event.target.value),
                     }))
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
               </label>
             </div>
           </section>
 
-          <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4">
-            <div className="mb-4 flex items-center gap-2 text-indigo-800">
+          <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+            <div className="mb-4 flex items-center gap-2 text-orange-800">
               <Target size={18} />
               <h3 className="font-semibold">Timeline Controls</h3>
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-gray-600">
+              <div className="rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm text-gray-600">
                 Monthly liquid savings are inferred from a trailing 3- or
                 6-month average using your selected FIRE month. The planner
                 backs out expected market growth and modeled retirement
@@ -464,7 +464,7 @@ export default function FireConfigModal({
                       dateOfBirth: parseOptionalDate(event.target.value),
                     }))
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
               </label>
 
@@ -483,7 +483,7 @@ export default function FireConfigModal({
                       targetFireAge: parseOptionalNumber(event.target.value),
                     }))
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
               </label>
 
@@ -504,7 +504,7 @@ export default function FireConfigModal({
                       ),
                     }))
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
                 <p className="mt-1 text-xs text-gray-500">
                   CPF or retirement-account contributions stop at this age, even
@@ -512,7 +512,7 @@ export default function FireConfigModal({
                 </p>
               </label>
 
-              <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3">
+              <div className="rounded-2xl border border-orange-200 bg-white px-4 py-3">
                 <p className="text-sm font-medium text-gray-700">
                   FIRE tracker month
                 </p>
@@ -526,8 +526,8 @@ export default function FireConfigModal({
                     onClick={() => onSnapshotPreferenceChange("current")}
                     className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       snapshotPreference === "current"
-                        ? "bg-white text-indigo-700 shadow-sm"
-                        : "text-gray-500 hover:text-indigo-600"
+                        ? "bg-white text-orange-700 shadow-sm"
+                        : "text-gray-500 hover:text-orange-700"
                     }`}
                   >
                     Current month
@@ -541,8 +541,8 @@ export default function FireConfigModal({
                     disabled={!previousSnapshot}
                     className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       snapshotPreference === "previous"
-                        ? "bg-white text-indigo-700 shadow-sm"
-                        : "text-gray-500 hover:text-indigo-600"
+                        ? "bg-white text-orange-700 shadow-sm"
+                        : "text-gray-500 hover:text-orange-700"
                     } ${!previousSnapshot ? "cursor-not-allowed opacity-50 hover:text-gray-500" : ""}`}
                   >
                     Previous month
@@ -559,7 +559,7 @@ export default function FireConfigModal({
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3">
+              <div className="rounded-2xl border border-orange-200 bg-white px-4 py-3">
                 <p className="text-sm font-medium text-gray-700">
                   Savings inference window
                 </p>
@@ -576,8 +576,8 @@ export default function FireConfigModal({
                       onClick={() => onSavingsAveragePreferenceChange(option)}
                       className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         savingsAveragePreference === option
-                          ? "bg-white text-indigo-700 shadow-sm"
-                          : "text-gray-500 hover:text-indigo-600"
+                          ? "bg-white text-orange-700 shadow-sm"
+                          : "text-gray-500 hover:text-orange-700"
                       }`}
                     >
                       {option}-month average
@@ -592,7 +592,7 @@ export default function FireConfigModal({
             </div>
           </section>
 
-          <section className="space-y-6 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <section className="space-y-6 rounded-2xl border border-orange-200 bg-orange-50/50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-gray-900">
@@ -606,7 +606,7 @@ export default function FireConfigModal({
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => loadExample(CPF_EXAMPLE_RETIREMENT_SYSTEM)}
-                  className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                  className="rounded-xl border border-orange-300 bg-white px-3 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100"
                 >
                   Load CPF Example
                 </button>
@@ -614,7 +614,7 @@ export default function FireConfigModal({
                   onClick={() =>
                     loadExample(SIMPLE_401K_EXAMPLE_RETIREMENT_SYSTEM)
                   }
-                  className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                  className="rounded-xl border border-orange-300 bg-white px-3 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100"
                 >
                   Load 401(k) Example
                 </button>
@@ -629,7 +629,7 @@ export default function FireConfigModal({
 
             {retirementSystemDraft ? (
               <>
-                <section className="rounded-2xl border border-emerald-200 bg-white p-4">
+                <section className="rounded-2xl border border-orange-200 bg-white p-4">
                   <div className="space-y-4">
                     <label className="block">
                       <span className="mb-1 block text-sm font-medium text-gray-700">
@@ -644,7 +644,7 @@ export default function FireConfigModal({
                             name: event.target.value,
                           })
                         }
-                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                       />
                     </label>
                     <label className="block">
@@ -664,7 +664,7 @@ export default function FireConfigModal({
                             ),
                           })
                         }
-                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                       />
                     </label>
                   </div>
@@ -703,7 +703,7 @@ export default function FireConfigModal({
                 </section>
 
                 {isCpfSystem ? (
-                  <section className="rounded-2xl border border-emerald-200 bg-white p-4">
+                  <section className="rounded-2xl border border-orange-200 bg-white p-4">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
                         <h4 className="font-semibold text-gray-900">
@@ -716,7 +716,7 @@ export default function FireConfigModal({
                       </div>
                       <button
                         onClick={addCpfMember}
-                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:from-orange-600 hover:to-red-600"
                       >
                         <Plus size={15} />
                         Add CPF Member
@@ -742,7 +742,7 @@ export default function FireConfigModal({
                                     name: event.target.value,
                                   })
                                 }
-                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                               />
                             </label>
                             <label className="block">
@@ -761,7 +761,7 @@ export default function FireConfigModal({
                                     ),
                                   })
                                 }
-                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                               />
                             </label>
                             <label className="block">
@@ -778,7 +778,7 @@ export default function FireConfigModal({
                                     ),
                                   })
                                 }
-                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                               />
                             </label>
                             <button
@@ -795,7 +795,7 @@ export default function FireConfigModal({
                   </section>
                 ) : null}
 
-                <section className="rounded-2xl border border-emerald-200 bg-white p-4">
+                <section className="rounded-2xl border border-orange-200 bg-white p-4">
                   <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <h4 className="font-semibold text-gray-900">
@@ -816,7 +816,7 @@ export default function FireConfigModal({
                           onChange={(event) =>
                             setBalanceMonthIndex(Number(event.target.value))
                           }
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                         >
                           {MONTHS.map((month, monthIndex) => (
                             <option key={month} value={monthIndex}>
@@ -838,7 +838,7 @@ export default function FireConfigModal({
                               Math.round(parseNumber(event.target.value)),
                             )
                           }
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                         />
                       </label>
                     </div>
@@ -896,7 +896,7 @@ export default function FireConfigModal({
                                 onChange={(event) =>
                                   updateBalance(account.id, event.target.value)
                                 }
-                                className="mt-3 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                className="mt-3 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                               />
                             </label>
                           ))}
@@ -925,7 +925,7 @@ export default function FireConfigModal({
                     }}
                     spellCheck={false}
                     rows={16}
-                    className="mt-3 min-h-[280px] w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 font-mono text-xs leading-6 text-gray-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                    className="mt-3 min-h-[280px] w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 font-mono text-xs leading-6 text-gray-700 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                   />
                   <div className="mt-3 flex justify-end">
                     <button
@@ -938,7 +938,7 @@ export default function FireConfigModal({
                 </details>
               </>
             ) : (
-              <section className="rounded-2xl border border-dashed border-emerald-300 bg-white px-5 py-6 text-sm text-gray-600">
+              <section className="rounded-2xl border border-dashed border-orange-300 bg-white px-5 py-6 text-sm text-gray-600">
                 Load a CPF example to start tracking per-person balances
                 monthly, or keep retirement disabled for a plain FIRE setup.
               </section>
@@ -972,7 +972,7 @@ export default function FireConfigModal({
             </button>
             <button
               onClick={handleSave}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              className="rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:from-orange-600 hover:to-red-600"
             >
               Save FIRE Settings
             </button>

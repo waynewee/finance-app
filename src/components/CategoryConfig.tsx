@@ -172,7 +172,7 @@ export default function CategoryConfig({
               className="border border-gray-200 rounded-xl overflow-hidden"
             >
               {/* Category row */}
-              <div className="flex items-center gap-2 bg-indigo-50 px-3 py-2">
+              <div className="flex items-center gap-2 bg-[#EEF9EA] px-3 py-2">
                 <button
                   title="Drag to reorder"
                   className="text-gray-400 cursor-grab active:cursor-grabbing flex flex-col gap-0.5"
@@ -184,14 +184,14 @@ export default function CategoryConfig({
                   <button
                     onClick={() => moveCategoryUp(catIdx)}
                     disabled={catIdx === 0}
-                    className="text-xs text-gray-400 hover:text-indigo-600 disabled:opacity-30 leading-none"
+                    className="text-xs leading-none text-gray-400 hover:text-[#1E7A18] disabled:opacity-30"
                   >
                     ▲
                   </button>
                   <button
                     onClick={() => moveCategoryDown(catIdx)}
                     disabled={catIdx === draft.length - 1}
-                    className="text-xs text-gray-400 hover:text-indigo-600 disabled:opacity-30 leading-none"
+                    className="text-xs leading-none text-gray-400 hover:text-[#1E7A18] disabled:opacity-30"
                   >
                     ▼
                   </button>
@@ -199,11 +199,11 @@ export default function CategoryConfig({
                 <input
                   value={cat.name}
                   onChange={(e) => updateCategoryName(cat.id, e.target.value)}
-                  className="flex-1 bg-transparent font-semibold text-indigo-800 border-b border-transparent focus:border-indigo-400 outline-none py-0.5"
+                  className="flex-1 border-b border-transparent bg-transparent py-0.5 font-semibold text-[#1E7A18] outline-none focus:border-[#2CA01C]"
                 />
                 <button
                   onClick={() => toggleCat(cat.id)}
-                  className="text-indigo-400 hover:text-indigo-600"
+                  className="text-[#57B44B] hover:text-[#1E7A18]"
                 >
                   {expandedCats.has(cat.id) ? (
                     <ChevronDown size={16} />
@@ -228,7 +228,7 @@ export default function CategoryConfig({
                         <button
                           onClick={() => moveSubUp(cat.id, subIdx)}
                           disabled={subIdx === 0}
-                          className="text-xs text-gray-300 hover:text-indigo-500 disabled:opacity-30 leading-none"
+                          className="text-xs leading-none text-gray-300 hover:text-[#2CA01C] disabled:opacity-30"
                         >
                           ▲
                         </button>
@@ -241,7 +241,7 @@ export default function CategoryConfig({
                             )
                           }
                           disabled={subIdx === cat.subcategories.length - 1}
-                          className="text-xs text-gray-300 hover:text-indigo-500 disabled:opacity-30 leading-none"
+                          className="text-xs leading-none text-gray-300 hover:text-[#2CA01C] disabled:opacity-30"
                         >
                           ▼
                         </button>
@@ -251,7 +251,7 @@ export default function CategoryConfig({
                         onChange={(e) =>
                           updateSubcategoryName(cat.id, sub.id, e.target.value)
                         }
-                        className="flex-1 text-sm text-gray-700 border-b border-transparent focus:border-indigo-300 outline-none py-0.5 bg-transparent"
+                        className="flex-1 border-b border-transparent bg-transparent py-0.5 text-sm text-gray-700 outline-none focus:border-[#9FD792]"
                       />
                       <button
                         onClick={() => removeSubcategory(cat.id, sub.id)}
@@ -276,11 +276,11 @@ export default function CategoryConfig({
                       onKeyDown={(e) =>
                         e.key === "Enter" && addSubcategory(cat.id)
                       }
-                      className="flex-1 text-sm border border-dashed border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-400"
+                      className="flex-1 rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-sm focus:border-[#2CA01C] focus:outline-none"
                     />
                     <button
                       onClick={() => addSubcategory(cat.id)}
-                      className="text-indigo-500 hover:text-indigo-700 transition-colors"
+                      className="text-[#2CA01C] transition-colors hover:text-[#1E7A18]"
                     >
                       <Plus size={16} />
                     </button>
@@ -297,11 +297,11 @@ export default function CategoryConfig({
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addCategory()}
-              className="flex-1 text-sm border border-dashed border-indigo-300 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500"
+              className="flex-1 rounded-xl border border-dashed border-[#9FD792] px-4 py-2 text-sm focus:border-[#2CA01C] focus:outline-none"
             />
             <button
               onClick={addCategory}
-              className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-2 rounded-xl transition-colors"
+              className="flex items-center gap-1 rounded-xl bg-[#2CA01C] px-3 py-2 text-sm text-white transition-colors hover:bg-[#248814]"
             >
               <Plus size={15} />
               Add
@@ -319,7 +319,7 @@ export default function CategoryConfig({
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors"
+            className="rounded-xl bg-[#2CA01C] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#248814]"
           >
             Save Changes
           </button>

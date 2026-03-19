@@ -6,8 +6,9 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
   Users,
+  Flame,
+  TrendingUp,
 } from "lucide-react";
 import { useAccountAccess } from "./hooks/useAccountAccess";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
@@ -185,7 +186,7 @@ function App() {
 
   if (isAuthLoading || (user && isAccountLoading)) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+      <div className="min-h-screen flex items-center justify-center px-6 bg-[var(--qb-green-muted)]">
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <p className="text-sm text-gray-500">
             {isAuthLoading
@@ -199,16 +200,14 @@ function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+      <div className="min-h-screen flex items-center justify-center px-6 bg-[var(--qb-green-muted)]">
         <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
           <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-2xl bg-indigo-600 p-3">
-              <TrendingUp size={22} className="text-white" />
+            <div className="rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-red-500 p-3 shadow-sm">
+              <Flame size={22} className="text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                Net Worth Tracker
-              </h1>
+              <h1 className="text-xl font-bold text-gray-900">Time to FIRE</h1>
               <p className="text-sm text-gray-500">Sign in with a magic link</p>
             </div>
           </div>
@@ -228,14 +227,14 @@ function App() {
                   }
                 }}
                 placeholder="you@example.com"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
               />
             </label>
 
             <button
               onClick={() => void handleSendMagicLink()}
               disabled={isSendingLink}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2CA01C] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#248814] disabled:cursor-not-allowed disabled:bg-[#9FD792]"
             >
               <Mail size={16} />
               {isSendingLink ? "Sending link..." : "Email me a sign-in link"}
@@ -270,17 +269,17 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--qb-green-muted)]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="bg-indigo-600 rounded-xl p-2">
-              <TrendingUp size={20} className="text-white" />
+            <div className="rounded-xl bg-gradient-to-br from-orange-500 via-amber-500 to-red-500 p-2 shadow-sm">
+              <Flame size={20} className="text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900 leading-tight">
-                Net Worth Tracker
+                Time to FIRE
               </h1>
               <p className="text-xs text-gray-500">
                 {activeAccount
@@ -299,26 +298,10 @@ function App() {
               <>
                 <button
                   onClick={() => setShowShareAccount(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all"
+                  className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
                 >
                   <Users size={15} />
                   Sharing
-                </button>
-
-                <button
-                  onClick={() => setShowConfig(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all"
-                >
-                  <Settings size={15} />
-                  Categories
-                </button>
-
-                <button
-                  onClick={() => setShowFireConfig(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all"
-                >
-                  <Calculator size={15} />
-                  FIRE
                 </button>
               </>
             ) : null}
@@ -362,7 +345,7 @@ function App() {
                       onChange={(event) =>
                         setActiveAccountId(event.target.value)
                       }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                     >
                       {accounts.map((account) => (
                         <option key={account.userId} value={account.userId}>
@@ -387,8 +370,8 @@ function App() {
                       onClick={() => setActivePage("net-worth")}
                       className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
                         activePage === "net-worth"
-                          ? "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
-                          : "border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-gray-50 hover:text-indigo-600"
+                          ? "border-[#9FD792] bg-[#EEF9EA] text-[#1E7A18] shadow-sm"
+                          : "border-gray-200 text-gray-600 hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -396,7 +379,7 @@ function App() {
                         Net Worth
                       </span>
                       {activePage === "net-worth" ? (
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#1E7A18]">
                           Active
                         </span>
                       ) : null}
@@ -409,8 +392,8 @@ function App() {
                       }}
                       className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
                         activePage === "investment-planner"
-                          ? "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
-                          : "border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-gray-50 hover:text-indigo-600"
+                          ? "border-[#9FD792] bg-[#EEF9EA] text-[#1E7A18] shadow-sm"
+                          : "border-gray-200 text-gray-600 hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -418,7 +401,7 @@ function App() {
                         Planner
                       </span>
                       {activePage === "investment-planner" ? (
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#1E7A18]">
                           Active
                         </span>
                       ) : null}
@@ -468,8 +451,12 @@ function App() {
                               onClick={() => setActiveDisplay(display.id)}
                               className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                                 activeDisplay === display.id
-                                  ? "bg-white text-indigo-700 shadow-sm"
-                                  : "text-gray-500 hover:text-indigo-600"
+                                  ? display.id === "fire"
+                                    ? "bg-white text-orange-700 shadow-sm"
+                                    : "bg-white text-[#1E7A18] shadow-sm"
+                                  : display.id === "fire"
+                                    ? "text-gray-500 hover:text-orange-700"
+                                    : "text-gray-500 hover:text-[#1E7A18]"
                               }`}
                             >
                               {display.label}
@@ -524,7 +511,7 @@ function App() {
                           <div className="flex items-center gap-1 rounded-xl bg-gray-100 px-1 py-1">
                             <button
                               onClick={() => setTableYear((year) => year - 1)}
-                              className="p-1.5 rounded-lg text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all"
+                              className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-white hover:text-[#1E7A18] hover:shadow-sm"
                               aria-label="Previous year"
                             >
                               <ChevronLeft size={16} />
@@ -534,16 +521,20 @@ function App() {
                             </span>
                             <button
                               onClick={() => setTableYear((year) => year + 1)}
-                              className="p-1.5 rounded-lg text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all"
+                              className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-white hover:text-[#1E7A18] hover:shadow-sm"
                               aria-label="Next year"
                             >
                               <ChevronRight size={16} />
                             </button>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-400">
-                          Click any cell to edit
-                        </p>
+                        <button
+                          onClick={() => setShowConfig(true)}
+                          className="flex items-center gap-2 rounded-xl border border-green-200 px-4 py-2 text-sm text-green-700 transition-all hover:border-green-300 hover:bg-green-50"
+                        >
+                          <Settings size={15} />
+                          Categories
+                        </button>
                       </div>
                       <NetWorthTable
                         year={tableYear}

@@ -157,7 +157,7 @@ export default function ShareAccountModal({
         <div className="space-y-6 overflow-y-auto px-6 py-5">
           <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <div className="flex items-start gap-3">
-              <div className="rounded-2xl bg-white p-3 text-indigo-700 shadow-sm">
+              <div className="rounded-2xl bg-white p-3 text-[#1E7A18] shadow-sm">
                 <Users size={18} />
               </div>
               <div className="flex-1">
@@ -177,7 +177,7 @@ export default function ShareAccountModal({
                       onChange={(event) =>
                         setDraftAccountName(event.target.value)
                       }
-                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                     />
                     <button
                       onClick={() => void handleRename()}
@@ -198,9 +198,9 @@ export default function ShareAccountModal({
           </section>
 
           {isOwner ? (
-            <section className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
+            <section className="rounded-2xl border border-[#9FD792] bg-[#EEF9EA]/70 p-4">
               <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-white p-3 text-indigo-700 shadow-sm">
+                <div className="rounded-2xl bg-white p-3 text-[#1E7A18] shadow-sm">
                   <UserRoundPlus size={18} />
                 </div>
                 <div className="flex-1">
@@ -229,13 +229,13 @@ export default function ShareAccountModal({
                           }
                         }}
                         placeholder="partner@example.com"
-                        className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                        className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
                       />
                     </div>
                     <button
                       onClick={() => void handleInvite()}
                       disabled={busyKey === "invite"}
-                      className="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
+                      className="rounded-xl bg-[#2CA01C] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#248814] disabled:cursor-not-allowed disabled:bg-[#9FD792]"
                     >
                       {busyKey === "invite" ? "Sending..." : "Send Invite"}
                     </button>

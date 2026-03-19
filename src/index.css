@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --qb-green: #2ca01c;
+  --qb-green-dark: #248814;
+  --qb-green-soft: #eef9ea;
+  --qb-green-muted: #f5faf4;
+  --qb-green-border: #9fd792;
+  --qb-green-text: #1e7a18;
+}
+
+body {
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(44, 160, 28, 0.1),
+      transparent 32%
+    ),
+    linear-gradient(180deg, #f7fbf6 0%, #f4f8f3 100%);
+  color: #111827;
+}
+
 button:not(:disabled),
 input[type="button"]:not(:disabled),
 input[type="submit"]:not(:disabled),

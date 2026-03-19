@@ -1,6 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { type Category, MONTHS } from "../data/defaultCategories";
+
+interface CellPosition {
+  sub: string;
+  month: number;
+}
 
 interface Props {
   year: number;
@@ -38,14 +43,21 @@ export default function NetWorthTable({
   getMonthTotal,
   getCategoryMonthTotal,
 }: Props) {
+  const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
     new Set(),
   );
-  const [editingCell, setEditingCell] = useState<{
-    sub: string;
-    month: number;
-  } | null>(null);
+  const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
+  const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  const visibleSubcategories = useMemo(
+    () =>
+      categories.flatMap((category) =>
+        collapsedCategories.has(category.id) ? [] : category.subcategories,
+      ),
+    [categories, collapsedCategories],
+  );
 
   const toggleCategory = (catId: string) => {
     setCollapsedCategories((prev) => {
@@ -56,15 +68,100 @@ export default function NetWorthTable({
   };
 
   const startEdit = (subId: string, monthIndex: number, current: number) => {
-    setEditingCell({ sub: subId, month: monthIndex });
+    const nextCell = { sub: subId, month: monthIndex };
+    setSelectedCell(nextCell);
+    setEditingCell(nextCell);
     setEditValue(current === 0 ? "" : String(current));
   };
 
-  const commitEdit = (subId: string, monthIndex: number) => {
-    setValue(year, monthIndex, subId, parseCurrency(editValue));
+  const commitEdit = (
+    subId: string,
+    monthIndex: number,
+    nextValue = editValue,
+  ) => {
+    setValue(year, monthIndex, subId, parseCurrency(nextValue));
     setEditingCell(null);
     setEditValue("");
   };
+
+  const cancelEdit = () => {
+    setEditingCell(null);
+    setEditValue("");
+  };
+
+  const moveSelection = (
+    currentCell: CellPosition,
+    rowOffset: number,
+    columnOffset: number,
+    options?: { startEditing?: boolean },
+  ) => {
+    const currentRowIndex = visibleSubcategories.findIndex(
+      (subcategory) => subcategory.id === currentCell.sub,
+    );
+
+    if (currentRowIndex === -1) {
+      return;
+    }
+
+    const nextRowIndex = Math.min(
+      Math.max(currentRowIndex + rowOffset, 0),
+      visibleSubcategories.length - 1,
+    );
+    const nextMonthIndex = Math.min(
+      Math.max(currentCell.month + columnOffset, 0),
+      MONTHS.length - 1,
+    );
+    const nextSubcategory = visibleSubcategories[nextRowIndex];
+
+    if (!nextSubcategory) {
+      return;
+    }
+
+    const nextCell = { sub: nextSubcategory.id, month: nextMonthIndex };
+    setSelectedCell(nextCell);
+
+    if (options?.startEditing) {
+      startEdit(
+        nextSubcategory.id,
+        nextMonthIndex,
+        getValue(year, nextMonthIndex, nextSubcategory.id),
+      );
+      return;
+    }
+
+    setEditingCell(null);
+  };
+
+  useEffect(() => {
+    if (!selectedCell || editingCell) {
+      return;
+    }
+
+    const activeKey = `${selectedCell.sub}-${selectedCell.month}`;
+    cellRefs.current[activeKey]?.focus();
+  }, [editingCell, selectedCell]);
+
+  useEffect(() => {
+    if (visibleSubcategories.length === 0) {
+      setSelectedCell(null);
+      setEditingCell(null);
+      setEditValue("");
+      return;
+    }
+
+    if (
+      selectedCell &&
+      visibleSubcategories.some(
+        (subcategory) => subcategory.id === selectedCell.sub,
+      )
+    ) {
+      return;
+    }
+
+    setSelectedCell({ sub: visibleSubcategories[0].id, month: 0 });
+    setEditingCell(null);
+    setEditValue("");
+  }, [selectedCell, visibleSubcategories]);
 
   const monthTotals = MONTHS.map((_, i) => getMonthTotal(year, i));
   const rowTotal = (subcategoryId: string) =>
@@ -92,15 +189,15 @@ export default function NetWorthTable({
                 {m}
               </th>
             ))}
-            <th className="px-3 py-3 text-right font-semibold text-gray-700 min-w-24 bg-indigo-50">
+            <th className="min-w-24 bg-[#EEF9EA] px-3 py-3 text-right font-semibold text-gray-700">
               Total
             </th>
           </tr>
         </thead>
         <tbody>
           {/* Total row */}
-          <tr className="border-t-2 border-indigo-300 bg-indigo-700 text-white font-bold">
-            <td className="sticky left-0 z-10 bg-indigo-700 px-4 py-3">
+          <tr className="border-t-2 border-[#9FD792] bg-[#2CA01C] font-bold text-white">
+            <td className="sticky left-0 z-10 bg-[#2CA01C] px-4 py-3">
               Net Worth
             </td>
             {monthTotals.map((total, i) => (
@@ -108,7 +205,7 @@ export default function NetWorthTable({
                 {formatNumber(total)}
               </td>
             ))}
-            <td className="px-3 py-3 text-right bg-indigo-800">
+            <td className="bg-[#248814] px-3 py-3 text-right">
               {formatNumber(grandTotal)}
             </td>
           </tr>
@@ -120,10 +217,10 @@ export default function NetWorthTable({
                 {/* Category header row */}
                 <tr
                   key={cat.id}
-                  className="bg-indigo-50 border-t border-gray-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                  className="cursor-pointer border-t border-gray-200 bg-[#EEF9EA] transition-colors hover:bg-[#E1F4DB]"
                   onClick={() => toggleCategory(cat.id)}
                 >
-                  <td className="sticky left-0 z-10 bg-indigo-50 px-4 py-2 font-semibold text-indigo-800 flex items-center gap-1.5">
+                  <td className="sticky left-0 z-10 flex items-center gap-1.5 bg-[#EEF9EA] px-4 py-2 font-semibold text-[#1E7A18]">
                     {isCollapsed ? (
                       <ChevronRight size={14} className="shrink-0" />
                     ) : (
@@ -136,13 +233,13 @@ export default function NetWorthTable({
                     return (
                       <td
                         key={i}
-                        className="px-3 py-2 text-right font-semibold text-indigo-700"
+                        className="px-3 py-2 text-right font-semibold text-[#1E7A18]"
                       >
                         {total !== 0 ? formatNumber(total) : ""}
                       </td>
                     );
                   })}
-                  <td className="px-3 py-2 text-right font-semibold text-indigo-700 bg-indigo-100">
+                  <td className="bg-[#E1F4DB] px-3 py-2 text-right font-semibold text-[#1E7A18]">
                     {catRowTotal(cat.id) !== 0
                       ? formatNumber(catRowTotal(cat.id))
                       : ""}
@@ -168,9 +265,6 @@ export default function NetWorthTable({
                           <td
                             key={monthIndex}
                             className="cursor-pointer px-1 py-1 text-right"
-                            onClick={() =>
-                              !isEditing && startEdit(sub.id, monthIndex, val)
-                            }
                           >
                             {isEditing ? (
                               <input
@@ -182,21 +276,134 @@ export default function NetWorthTable({
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter")
                                     commitEdit(sub.id, monthIndex);
+                                  if (e.key === "ArrowRight") {
+                                    e.preventDefault();
+                                    commitEdit(sub.id, monthIndex);
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      0,
+                                      1,
+                                      { startEditing: true },
+                                    );
+                                  }
+                                  if (e.key === "ArrowLeft") {
+                                    e.preventDefault();
+                                    commitEdit(sub.id, monthIndex);
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      0,
+                                      -1,
+                                      { startEditing: true },
+                                    );
+                                  }
+                                  if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    commitEdit(sub.id, monthIndex);
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      1,
+                                      0,
+                                      { startEditing: true },
+                                    );
+                                  }
+                                  if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    commitEdit(sub.id, monthIndex);
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      -1,
+                                      0,
+                                      { startEditing: true },
+                                    );
+                                  }
                                   if (e.key === "Escape") {
-                                    setEditingCell(null);
-                                    setEditValue("");
+                                    cancelEdit();
                                   }
                                 }}
-                                className="w-full text-right bg-indigo-50 border border-indigo-300 rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+                                className="w-full rounded border border-[#9FD792] bg-[#EEF9EA] px-2 py-0.5 text-right text-sm outline-none focus:ring-2 focus:ring-[#2CA01C]/20"
                               />
                             ) : (
-                              <span className="block px-2 py-0.5 rounded cursor-pointer hover:bg-indigo-50 text-gray-700">
+                              <button
+                                ref={(element) => {
+                                  cellRefs.current[`${sub.id}-${monthIndex}`] =
+                                    element;
+                                }}
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    selectedCell?.sub === sub.id &&
+                                    selectedCell?.month === monthIndex
+                                  ) {
+                                    startEdit(sub.id, monthIndex, val);
+                                    return;
+                                  }
+
+                                  setSelectedCell({
+                                    sub: sub.id,
+                                    month: monthIndex,
+                                  });
+                                }}
+                                onDoubleClick={() =>
+                                  startEdit(sub.id, monthIndex, val)
+                                }
+                                onFocus={() =>
+                                  setSelectedCell({
+                                    sub: sub.id,
+                                    month: monthIndex,
+                                  })
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    startEdit(sub.id, monthIndex, val);
+                                  }
+                                  if (e.key === "ArrowRight") {
+                                    e.preventDefault();
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      0,
+                                      1,
+                                    );
+                                  }
+                                  if (e.key === "ArrowLeft") {
+                                    e.preventDefault();
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      0,
+                                      -1,
+                                    );
+                                  }
+                                  if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      1,
+                                      0,
+                                    );
+                                  }
+                                  if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    moveSelection(
+                                      { sub: sub.id, month: monthIndex },
+                                      -1,
+                                      0,
+                                    );
+                                  }
+                                }}
+                                aria-label={`${sub.name} ${MONTHS[monthIndex]}`}
+                                className={`block w-full rounded px-2 py-0.5 text-right text-gray-700 outline-none transition-colors hover:bg-[#EEF9EA] focus:bg-[#EEF9EA] ${
+                                  selectedCell?.sub === sub.id &&
+                                  selectedCell?.month === monthIndex
+                                    ? "ring-2 ring-[#2CA01C]/30"
+                                    : ""
+                                }`}
+                              >
                                 {val !== 0 ? (
                                   formatNumber(val)
                                 ) : (
                                   <span className="text-gray-300">—</span>
                                 )}
-                              </span>
+                              </button>
                             )}
                           </td>
                         );

@@ -120,7 +120,7 @@ export default function FireTracker({
           </div>
           <button
             onClick={onOpenConfig}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            className="rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:from-orange-600 hover:to-red-600"
           >
             Configure FIRE
           </button>
@@ -194,21 +194,21 @@ export default function FireTracker({
       value: formatCurrency(projection.fireNumber),
       helper: `${formatCurrency(fireSettings.annualSpendingGoal)} spending at ${formatPercent(fireSettings.withdrawalRate)}`,
       icon: Flame,
-      accent: "from-amber-500/15 to-orange-500/5 text-amber-700",
+      accent: "from-amber-500/20 to-red-500/10 text-orange-700",
     },
     {
       label: "Current Progress",
       value: formatPercent(fundedPercent),
       helper: `${formatCurrency(projection.gapToGoal)} still to go from ${formatCurrency(projection.accessibleNetWorth)} accessible today`,
       icon: Landmark,
-      accent: "from-indigo-500/15 to-sky-500/5 text-indigo-700",
+      accent: "from-orange-500/15 to-red-500/10 text-red-700",
     },
     {
       label: "Time To FIRE",
       value: timeToFireValue,
       helper: `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
       icon: TrendingUp,
-      accent: "from-emerald-500/15 to-teal-500/5 text-emerald-700",
+      accent: "from-orange-400/20 to-amber-500/10 text-orange-700",
       hasSavingsAverageToggle: true,
     },
     {
@@ -222,7 +222,7 @@ export default function FireTracker({
           ? targetAgeSummary
           : `${targetAgeSummary} Current age: ${currentAge}.`,
       icon: Goal,
-      accent: "from-rose-500/15 to-fuchsia-500/5 text-rose-700",
+      accent: "from-red-500/20 to-orange-500/10 text-red-700",
     },
   ];
   const liquidityCards = retirementProjection
@@ -256,7 +256,7 @@ export default function FireTracker({
       <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-gray-900">
-            <Flame size={19} className="text-amber-500" />
+            <Flame size={19} className="text-orange-500" />
             <h2 className="text-lg font-semibold">FIRE Tracker</h2>
           </div>
           <p className="mt-1 text-sm text-gray-500">
@@ -272,8 +272,8 @@ export default function FireTracker({
               onClick={() => onSnapshotPreferenceChange("current")}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 snapshotPreference === "current"
-                  ? "bg-white text-indigo-700 shadow-sm"
-                  : "text-gray-500 hover:text-indigo-600"
+                  ? "bg-white text-orange-700 shadow-sm"
+                  : "text-gray-500 hover:text-orange-700"
               }`}
             >
               Current month
@@ -284,8 +284,8 @@ export default function FireTracker({
               disabled={!previousSnapshot}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 snapshotPreference === "previous"
-                  ? "bg-white text-indigo-700 shadow-sm"
-                  : "text-gray-500 hover:text-indigo-600"
+                  ? "bg-white text-orange-700 shadow-sm"
+                  : "text-gray-500 hover:text-orange-700"
               } ${!previousSnapshot ? "cursor-not-allowed opacity-50 hover:text-gray-500" : ""}`}
             >
               Previous month
@@ -293,7 +293,7 @@ export default function FireTracker({
           </div>
           <button
             onClick={onOpenConfig}
-            className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+            className="rounded-xl border border-orange-200 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-red-700"
           >
             Edit FIRE Settings
           </button>
@@ -327,11 +327,11 @@ export default function FireTracker({
                           }
                           className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                             savingsAveragePreference === option
-                              ? "bg-white text-indigo-700 shadow-sm"
-                              : "text-gray-500 hover:text-indigo-600"
+                              ? "bg-white text-orange-700 shadow-sm"
+                              : "text-gray-500 hover:text-orange-700"
                           }`}
                         >
-                          {option}-month avg
+                          {option}m avg
                         </button>
                       ))}
                     </div>
@@ -375,7 +375,7 @@ export default function FireTracker({
 
       {retirementProjection ? (
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-          <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+          <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-gray-900">
@@ -398,7 +398,7 @@ export default function FireTracker({
                 <p className="text-xs uppercase tracking-wide text-gray-400">
                   Est. income
                 </p>
-                <p className="text-sm font-semibold text-emerald-700">
+                <p className="text-sm font-semibold text-orange-700">
                   {formatCurrency(
                     retirementProjection.estimatedMonthlyRetirementIncome,
                   )}
@@ -411,7 +411,7 @@ export default function FireTracker({
               {liquidityCards.map((card) => (
                 <div
                   key={card.label}
-                  className="rounded-2xl border border-emerald-100 bg-white px-4 py-3"
+                  className="rounded-2xl border border-orange-100 bg-white px-4 py-3"
                 >
                   <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
                     {card.label}
@@ -423,7 +423,7 @@ export default function FireTracker({
               ))}
             </div>
 
-            <div className="mt-4 rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-600">
+            <div className="mt-4 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm text-gray-600">
               Payout phase starts at age{" "}
               {retirementProjection.payoutStartAge ?? "n/a"}. Restricted
               balances stay excluded from usable FIRE assets.
@@ -544,7 +544,7 @@ export default function FireTracker({
                         <td className="px-4 py-3 text-gray-900">
                           {formatCurrency(account.projectedBalance)}
                         </td>
-                        <td className="px-4 py-3 text-emerald-700">
+                        <td className="px-4 py-3 text-orange-700">
                           {account.estimatedMonthlyIncome > 0
                             ? `${formatCurrency(account.estimatedMonthlyIncome)}/mo`
                             : "n/a"}
@@ -588,7 +588,7 @@ export default function FireTracker({
                     <p className="mt-1 text-sm text-gray-600">
                       {formatCurrency(point.accessibleBalance)} usable for FIRE
                     </p>
-                    <p className="mt-1 text-sm text-emerald-700">
+                    <p className="mt-1 text-sm text-orange-700">
                       {formatCurrency(point.estimatedMonthlyIncome)}/mo
                       retirement income
                     </p>
@@ -649,7 +649,7 @@ export default function FireTracker({
                           <td className="px-4 py-3 text-gray-900">
                             {formatCurrency(point.accessibleBalance)}
                           </td>
-                          <td className="px-4 py-3 text-emerald-700">
+                          <td className="px-4 py-3 text-orange-700">
                             {formatCurrency(point.estimatedMonthlyIncome)}/mo
                           </td>
                         </tr>

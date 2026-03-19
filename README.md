@@ -15,6 +15,7 @@ Environment variables:
 VITE_SUPABASE_URL=your-supabase-url
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 VITE_FINNHUB_API_KEY=your-finnhub-api-key
+VITE_MAGIC_LINK_REDIRECT_URL=http://localhost:5173/
 ```
 
 The investment planner fetches live quotes from Finnhub in the browser.
@@ -52,6 +53,9 @@ If the app starts without the required env vars, it now renders a setup screen i
 - This is a client-side Vite app, so your host should serve `index.html` for app routes.
 - The production build output directory is `dist`.
 - Magic-link auth redirects back to the current origin and pathname, so the deployed URL must be present in Supabase redirect settings.
+- If you want local development to always force localhost as the magic-link return target, set `VITE_MAGIC_LINK_REDIRECT_URL=http://localhost:5173/` in `.env.local`.
+- In Supabase Auth -> URL Configuration, add `http://localhost:5173/**` to Redirect URLs.
+- If you customized the Supabase email template, make sure it uses `{{ .RedirectTo }}` instead of `{{ .SiteURL }}` or Supabase will keep sending users to the production site URL.
 
 ## GitHub Pages
 

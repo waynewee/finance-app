@@ -47,7 +47,7 @@ interface TimelinePoint {
 type QuickRangePreset = "3M" | "6M" | "YTD";
 
 const CATEGORY_COLORS = [
-  "#6366f1", // indigo
+  "#2ca01c", // QuickBooks green
   "#10b981", // emerald
   "#f59e0b", // amber
   "#ef4444", // red
@@ -265,8 +265,8 @@ export default function NetWorthChart({
                   onClick={() => applyTrailingRange(3)}
                   className={`flex h-full items-center rounded-lg px-3 text-sm font-medium transition-all ${
                     activePreset === "3M"
-                      ? "bg-white text-indigo-700 shadow-sm"
-                      : "text-gray-500 hover:text-indigo-600"
+                      ? "bg-white text-[#1E7A18] shadow-sm"
+                      : "text-gray-500 hover:text-[#1E7A18]"
                   }`}
                 >
                   3M
@@ -276,8 +276,8 @@ export default function NetWorthChart({
                   onClick={() => applyTrailingRange(6)}
                   className={`flex h-full items-center rounded-lg px-3 text-sm font-medium transition-all ${
                     activePreset === "6M"
-                      ? "bg-white text-indigo-700 shadow-sm"
-                      : "text-gray-500 hover:text-indigo-600"
+                      ? "bg-white text-[#1E7A18] shadow-sm"
+                      : "text-gray-500 hover:text-[#1E7A18]"
                   }`}
                 >
                   6M
@@ -287,8 +287,8 @@ export default function NetWorthChart({
                   onClick={applyYearToDateRange}
                   className={`flex h-full items-center rounded-lg px-3 text-sm font-medium transition-all ${
                     activePreset === "YTD"
-                      ? "bg-white text-indigo-700 shadow-sm"
-                      : "text-gray-500 hover:text-indigo-600"
+                      ? "bg-white text-[#1E7A18] shadow-sm"
+                      : "text-gray-500 hover:text-[#1E7A18]"
                   }`}
                 >
                   YTD
@@ -301,7 +301,7 @@ export default function NetWorthChart({
               <select
                 value={startMonth}
                 onChange={(event) => handleStartMonthChange(event.target.value)}
-                className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
               >
                 {timeline.map((point) => (
                   <option key={`start-${point.value}`} value={point.value}>
@@ -316,7 +316,7 @@ export default function NetWorthChart({
               <select
                 value={endMonth}
                 onChange={(event) => handleEndMonthChange(event.target.value)}
-                className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
               >
                 {timeline.map((point) => (
                   <option key={`end-${point.value}`} value={point.value}>
@@ -438,8 +438,8 @@ export default function NetWorthChart({
                 onClick={() => applyTrailingRange(3)}
                 className={`flex h-full items-center rounded-lg px-3 text-sm font-medium transition-all ${
                   activePreset === "3M"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-500 hover:text-indigo-600"
+                    ? "bg-white text-[#1E7A18] shadow-sm"
+                    : "text-gray-500 hover:text-[#1E7A18]"
                 }`}
               >
                 3M
@@ -449,8 +449,8 @@ export default function NetWorthChart({
                 onClick={() => applyTrailingRange(6)}
                 className={`flex h-full items-center rounded-lg px-3 text-sm font-medium transition-all ${
                   activePreset === "6M"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-500 hover:text-indigo-600"
+                    ? "bg-white text-[#1E7A18] shadow-sm"
+                    : "text-gray-500 hover:text-[#1E7A18]"
                 }`}
               >
                 6M
@@ -460,8 +460,8 @@ export default function NetWorthChart({
                 onClick={applyYearToDateRange}
                 className={`flex h-full items-center rounded-lg px-3 text-sm font-medium transition-all ${
                   activePreset === "YTD"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-500 hover:text-indigo-600"
+                    ? "bg-white text-[#1E7A18] shadow-sm"
+                    : "text-gray-500 hover:text-[#1E7A18]"
                 }`}
               >
                 YTD
@@ -474,7 +474,7 @@ export default function NetWorthChart({
             <select
               value={startMonth}
               onChange={(event) => handleStartMonthChange(event.target.value)}
-              className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
             >
               {timeline.map((point) => (
                 <option key={`start-${point.value}`} value={point.value}>
@@ -489,7 +489,7 @@ export default function NetWorthChart({
             <select
               value={endMonth}
               onChange={(event) => handleEndMonthChange(event.target.value)}
-              className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              className="block rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
             >
               {timeline.map((point) => (
                 <option key={`end-${point.value}`} value={point.value}>

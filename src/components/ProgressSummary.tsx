@@ -109,8 +109,8 @@ export default function ProgressSummary({
               onClick={() => onComparisonModeChange("current")}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                 comparisonMode === "current"
-                  ? "bg-white text-indigo-700 shadow-sm"
-                  : "text-gray-500 hover:text-indigo-600"
+                  ? "bg-white text-[#1E7A18] shadow-sm"
+                  : "text-gray-500 hover:text-[#1E7A18]"
               }`}
             >
               Current month
@@ -120,8 +120,8 @@ export default function ProgressSummary({
               onClick={() => onComparisonModeChange("previous")}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                 comparisonMode === "previous"
-                  ? "bg-white text-indigo-700 shadow-sm"
-                  : "text-gray-500 hover:text-indigo-600"
+                  ? "bg-white text-[#1E7A18] shadow-sm"
+                  : "text-gray-500 hover:text-[#1E7A18]"
               }`}
             >
               Previous month
@@ -226,8 +226,8 @@ export default function ProgressSummary({
             onClick={() => onComparisonModeChange("current")}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
               comparisonMode === "current"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-gray-500 hover:text-indigo-600"
+                ? "bg-white text-[#1E7A18] shadow-sm"
+                : "text-gray-500 hover:text-[#1E7A18]"
             }`}
           >
             Current month
@@ -237,8 +237,8 @@ export default function ProgressSummary({
             onClick={() => onComparisonModeChange("previous")}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
               comparisonMode === "previous"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-gray-500 hover:text-indigo-600"
+                ? "bg-white text-[#1E7A18] shadow-sm"
+                : "text-gray-500 hover:text-[#1E7A18]"
             }`}
           >
             Previous month

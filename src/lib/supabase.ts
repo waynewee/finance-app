@@ -2,10 +2,16 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const magicLinkRedirectUrlOverride =
+  import.meta.env.VITE_MAGIC_LINK_REDIRECT_URL?.trim() || null;
 const supabaseConfigError =
   !supabaseUrl || !supabaseAnonKey
     ? "Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY before starting the app."
     : null;
+
+function normalizeRedirectUrl(url: string): string {
+  return url.endsWith("/") ? url : `${url}/`;
+}
 
 const missingSupabaseClient = new Proxy(
   {},
@@ -31,11 +37,18 @@ export function getSupabaseConfigError(): string | null {
 }
 
 export function getMagicLinkRedirectUrl(): string | undefined {
+  if (magicLinkRedirectUrlOverride) {
+    return normalizeRedirectUrl(magicLinkRedirectUrlOverride);
+  }
+
   if (typeof window === "undefined") {
     return undefined;
   }
 
-  return `${window.location.origin}${window.location.pathname}`;
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  return normalizeRedirectUrl(url.toString());
 }
 
 export async function sendMagicLinkEmail(email: string): Promise<void> {
