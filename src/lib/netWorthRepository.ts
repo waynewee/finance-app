@@ -249,6 +249,49 @@ export async function saveMonthlyValue(
   }
 }
 
+export async function replaceYearMonthlyValues(
+  userId: string,
+  year: number,
+  valuesBySubcategory: Record<string, number[]>,
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from("monthly_values")
+    .delete()
+    .eq("user_id", userId)
+    .eq("year", year);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const rows = Object.entries(valuesBySubcategory).flatMap(
+    ([subcategoryId, values]) =>
+      values
+        .map((value, month) => ({ month, value, subcategoryId }))
+        .filter((entry) => entry.value !== 0)
+        .map((entry) => ({
+          user_id: userId,
+          year,
+          month: entry.month,
+          subcategory_id: subcategoryId,
+          value: entry.value,
+          updated_at: new Date().toISOString(),
+        })),
+  );
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const { error: insertError } = await supabase
+    .from("monthly_values")
+    .insert(rows);
+
+  if (insertError) {
+    throw insertError;
+  }
+}
+
 export async function replaceCategories(
   userId: string,
   categories: Category[],

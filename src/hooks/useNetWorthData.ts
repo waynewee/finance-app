@@ -3,6 +3,7 @@ import { type Category } from "../data/defaultCategories";
 import {
   DEFAULT_FIRE_SETTINGS,
   loadNetWorthState,
+  replaceYearMonthlyValues,
   replaceCategories,
   saveMonthlyValue,
   saveFireSettings,
@@ -239,6 +240,57 @@ export function useNetWorthData(accountUserId: string | null) {
     [accountUserId],
   );
 
+  const replaceYearData = useCallback(
+    async (year: number, valuesBySubcategory: Record<string, number[]>) => {
+      if (!accountUserId) {
+        return;
+      }
+
+      const nextYearData = Object.entries(valuesBySubcategory).reduce<
+        MonthlyData[string]
+      >((result, [subcategoryId, values]) => {
+        values.forEach((value, monthIndex) => {
+          if (value === 0) {
+            return;
+          }
+
+          result[monthIndex] ??= {};
+          result[monthIndex][subcategoryId] = value;
+        });
+
+        return result;
+      }, {});
+
+      const previousYearData = monthlyData[year] ?? {};
+
+      setMonthlyData((prev) => ({
+        ...prev,
+        [year]: nextYearData,
+      }));
+      setError(null);
+
+      try {
+        await replaceYearMonthlyValues(
+          accountUserId,
+          year,
+          valuesBySubcategory,
+        );
+      } catch (saveError) {
+        setMonthlyData((prev) => ({
+          ...prev,
+          [year]: previousYearData,
+        }));
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Failed to import yearly data.",
+        );
+        throw saveError;
+      }
+    },
+    [accountUserId, monthlyData],
+  );
+
   return {
     categories,
     monthlyData,
@@ -254,5 +306,6 @@ export function useNetWorthData(accountUserId: string | null) {
     getPreviousSnapshot,
     updateCategories,
     updateFireSettings,
+    replaceYearData,
   };
 }

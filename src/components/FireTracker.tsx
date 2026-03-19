@@ -398,7 +398,7 @@ export default function FireTracker({
                 <p className="text-xs uppercase tracking-wide text-gray-400">
                   Est. income
                 </p>
-                <p className="text-sm font-semibold text-orange-700">
+                <p className="text-sm font-semibold text-green-700">
                   {formatCurrency(
                     retirementProjection.estimatedMonthlyRetirementIncome,
                   )}
@@ -544,7 +544,7 @@ export default function FireTracker({
                         <td className="px-4 py-3 text-gray-900">
                           {formatCurrency(account.projectedBalance)}
                         </td>
-                        <td className="px-4 py-3 text-orange-700">
+                        <td className="px-4 py-3 text-green-700">
                           {account.estimatedMonthlyIncome > 0
                             ? `${formatCurrency(account.estimatedMonthlyIncome)}/mo`
                             : "n/a"}
@@ -588,7 +588,7 @@ export default function FireTracker({
                     <p className="mt-1 text-sm text-gray-600">
                       {formatCurrency(point.accessibleBalance)} usable for FIRE
                     </p>
-                    <p className="mt-1 text-sm text-orange-700">
+                    <p className="mt-1 text-sm text-green-700">
                       {formatCurrency(point.estimatedMonthlyIncome)}/mo
                       retirement income
                     </p>

@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Calculator,
+  Download,
   LogOut,
   Mail,
   Settings,
   ChevronLeft,
   ChevronRight,
+  Upload,
   Users,
   Flame,
   TrendingUp,
@@ -31,6 +33,11 @@ import {
   type FireSavingsAveragePreference,
   type FireSnapshotPreference,
 } from "./lib/firePreferences";
+import {
+  buildYearCsv,
+  buildYearTemplateCsv,
+  parseYearCsv,
+} from "./lib/netWorthCsv";
 
 type AppPage = "net-worth" | "investment-planner";
 type NetWorthDisplay = "summary" | "fire" | "chart";
@@ -53,6 +60,9 @@ function App() {
   const [email, setEmail] = useState("");
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isSendingLink, setIsSendingLink] = useState(false);
+  const [csvNotice, setCsvNotice] = useState<string | null>(null);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     user,
@@ -92,6 +102,7 @@ function App() {
     getPreviousSnapshot,
     updateCategories,
     updateFireSettings,
+    replaceYearData,
   } = useNetWorthData(activeAccountId);
 
   useEffect(() => {
@@ -119,6 +130,59 @@ function App() {
   ) => {
     setFireSavingsAveragePreference(preference);
     setStoredFireSavingsAveragePreference(user?.id, preference);
+  };
+
+  const downloadCsvFile = (fileName: string, content: string) => {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    const csv = buildYearCsv(categories, (monthIndex, subcategoryId) =>
+      getValue(tableYear, monthIndex, subcategoryId),
+    );
+
+    downloadCsvFile(`net-worth-${tableYear}.csv`, csv);
+    setCsvNotice(`Exported ${tableYear} net worth table as CSV.`);
+  };
+
+  const handleDownloadTemplate = () => {
+    const csv = buildYearTemplateCsv(categories);
+    downloadCsvFile(`net-worth-template-${tableYear}.csv`, csv);
+    setCsvNotice(`Downloaded a CSV template for ${tableYear}.`);
+  };
+
+  const handleImportCsv = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setIsImportingCsv(true);
+
+    try {
+      const content = await file.text();
+      const importedValues = parseYearCsv(content, categories);
+      await replaceYearData(tableYear, importedValues);
+      setCsvNotice(`Imported CSV into the ${tableYear} net worth table.`);
+    } catch (importError) {
+      setCsvNotice(
+        importError instanceof Error
+          ? importError.message
+          : "Failed to import CSV.",
+      );
+    } finally {
+      setIsImportingCsv(false);
+    }
   };
 
   const handleSendMagicLink = async () => {
@@ -528,14 +592,50 @@ function App() {
                             </button>
                           </div>
                         </div>
-                        <button
-                          onClick={() => setShowConfig(true)}
-                          className="flex items-center gap-2 rounded-xl border border-green-200 px-4 py-2 text-sm text-green-700 transition-all hover:border-green-300 hover:bg-green-50"
-                        >
-                          <Settings size={15} />
-                          Categories
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={handleDownloadTemplate}
+                            className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
+                          >
+                            <Download size={15} />
+                            Template CSV
+                          </button>
+                          <button
+                            onClick={handleExportCsv}
+                            className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
+                          >
+                            <Download size={15} />
+                            Export CSV
+                          </button>
+                          <button
+                            onClick={() => importInputRef.current?.click()}
+                            disabled={isImportingCsv}
+                            className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Upload size={15} />
+                            {isImportingCsv ? "Importing..." : "Import CSV"}
+                          </button>
+                          <button
+                            onClick={() => setShowConfig(true)}
+                            className="flex items-center gap-2 rounded-xl border border-green-200 px-4 py-2 text-sm text-green-700 transition-all hover:border-green-300 hover:bg-green-50"
+                          >
+                            <Settings size={15} />
+                            Categories
+                          </button>
+                          <input
+                            ref={importInputRef}
+                            type="file"
+                            accept=".csv,text/csv"
+                            className="hidden"
+                            onChange={(event) => void handleImportCsv(event)}
+                          />
+                        </div>
                       </div>
+                      {csvNotice ? (
+                        <div className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
+                          {csvNotice}
+                        </div>
+                      ) : null}
                       <NetWorthTable
                         year={tableYear}
                         categories={categories}
