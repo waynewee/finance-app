@@ -35,7 +35,6 @@ import {
 } from "./lib/firePreferences";
 import {
   buildYearCsv,
-  buildYearTemplateCsv,
   parseYearCsv,
 } from "./lib/netWorthCsv";
 
