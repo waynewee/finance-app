@@ -11,6 +11,8 @@ import {
   Users,
   Flame,
   TrendingUp,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useAccountAccess } from "./hooks/useAccountAccess";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
@@ -47,6 +49,7 @@ function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [showRetirementConfig, setShowRetirementConfig] = useState(false);
   const [showShareAccount, setShowShareAccount] = useState(false);
+  const [hideValues, setHideValues] = useState(false);
   const [activePage, setActivePage] = useState<AppPage>("net-worth");
   const [activeDisplay, setActiveDisplay] =
     useState<NetWorthDisplay>("summary");
@@ -351,16 +354,27 @@ function App() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap justify-end">
+            <button
+              onClick={() => setHideValues((previous) => !previous)}
+              aria-pressed={hideValues}
+              className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition-all ${
+                hideValues
+                  ? "border-orange-200 bg-orange-50 text-orange-700 hover:border-orange-300 hover:bg-orange-100"
+                  : "border-gray-300 text-gray-600 hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
+              }`}
+            >
+              {hideValues ? <Eye size={15} /> : <EyeOff size={15} />}
+              {hideValues ? "Show Values" : "Hide Values"}
+            </button>
+
             {activePage === "net-worth" ? (
-              <>
-                <button
-                  onClick={() => setShowShareAccount(true)}
-                  className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
-                >
-                  <Users size={15} />
-                  Sharing
-                </button>
-              </>
+              <button
+                onClick={() => setShowShareAccount(true)}
+                className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
+              >
+                <Users size={15} />
+                Sharing
+              </button>
             ) : null}
 
             <button
@@ -525,6 +539,7 @@ function App() {
 
                     {activeDisplay === "summary" ? (
                       <ProgressSummary
+                        hideValues={hideValues}
                         year={summaryYear}
                         snapshots={netWorthSnapshots}
                         comparisonMode={summarySnapshotPreference}
@@ -534,6 +549,7 @@ function App() {
 
                     {activeDisplay === "fire" ? (
                       <FireTracker
+                        hideValues={hideValues}
                         fireSettings={fireSettings}
                         snapshots={netWorthSnapshots}
                         selectedSnapshot={fireSnapshot}
@@ -555,6 +571,7 @@ function App() {
 
                     {activeDisplay === "chart" ? (
                       <NetWorthChart
+                        hideValues={hideValues}
                         categories={categories}
                         monthlyData={monthlyData}
                         getCategoryMonthTotal={getCategoryMonthTotal}
@@ -626,6 +643,7 @@ function App() {
                         </div>
                       ) : null}
                       <NetWorthTable
+                        hideValues={hideValues}
                         year={tableYear}
                         categories={categories}
                         getValue={getValue}
@@ -638,6 +656,7 @@ function App() {
                 ) : (
                   <InvestmentPlannerPage
                     accountUserId={activeAccountId ?? user.id}
+                    hideValues={hideValues}
                   />
                 )}
               </>

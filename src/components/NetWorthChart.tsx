@@ -15,6 +15,7 @@ import {
 import { Line } from "react-chartjs-2";
 import { type Category, MONTHS } from "../data/defaultCategories";
 import { type MonthlyData } from "../lib/netWorthRepository";
+import { HIDDEN_VALUE } from "../lib/valueMasking";
 
 ChartJS.register(
   CategoryScale,
@@ -27,6 +28,7 @@ ChartJS.register(
 );
 
 interface Props {
+  hideValues: boolean;
   categories: Category[];
   monthlyData: MonthlyData;
   getCategoryMonthTotal: (
@@ -128,6 +130,7 @@ function buildTimeline(monthlyData: MonthlyData): TimelinePoint[] {
 }
 
 export default function NetWorthChart({
+  hideValues,
   categories,
   monthlyData,
   getCategoryMonthTotal,
@@ -378,14 +381,14 @@ export default function NetWorthChart({
         callbacks: {
           label(context: TooltipItem<"line">) {
             const value = context.parsed.y ?? 0;
-            return `${context.dataset.label}: ${formatCurrency(value)}`;
+            return `${context.dataset.label}: ${hideValues ? HIDDEN_VALUE : formatCurrency(value)}`;
           },
           footer(items) {
             const total = items.reduce(
               (sum, item) => sum + (item.parsed.y ?? 0),
               0,
             );
-            return `Total: ${formatCurrency(total)}`;
+            return `Total: ${hideValues ? HIDDEN_VALUE : formatCurrency(total)}`;
           },
         },
       },
@@ -404,7 +407,7 @@ export default function NetWorthChart({
         ticks: {
           color: "#6b7280",
           callback(value) {
-            return formatCurrency(Number(value));
+            return hideValues ? HIDDEN_VALUE : formatCurrency(Number(value));
           },
         },
         grid: {

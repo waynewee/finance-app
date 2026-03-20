@@ -3,9 +3,15 @@ import { Calculator, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { useInvestmentPlanner } from "../hooks/useInvestmentPlanner";
 import { type InvestmentAsset } from "../lib/investmentPlannerRepository";
 import { fetchLiveQuotes } from "../lib/livePriceService";
+import {
+  HIDDEN_VALUE,
+  maskDisplayValue,
+  maskInlineNumbers,
+} from "../lib/valueMasking";
 
 interface Props {
   accountUserId: string;
+  hideValues: boolean;
 }
 
 function createAssetId(): string {
@@ -131,7 +137,10 @@ function getQuoteBadge(quoteUpdatedAt: string | null): {
   };
 }
 
-export default function InvestmentPlannerPage({ accountUserId }: Props) {
+export default function InvestmentPlannerPage({
+  accountUserId,
+  hideValues,
+}: Props) {
   const { assets, isLoading, error, saveAssets } =
     useInvestmentPlanner(accountUserId);
   const [draftAssets, setDraftAssets] = useState<InvestmentAsset[]>([]);
@@ -196,6 +205,12 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
       }),
     [budget, draftAssets],
   );
+  const displayCurrency = (value: number): string =>
+    maskDisplayValue(formatCurrency(value), hideValues);
+  const displayPercent = (value: number): string =>
+    maskDisplayValue(formatPercent(value), hideValues);
+  const displayShares = (value: number): string =>
+    maskDisplayValue(formatShares(value), hideValues);
 
   const updateAsset = (
     assetId: string,
@@ -368,7 +383,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
               Total planned budget
             </p>
             <p className="mt-2 text-2xl font-semibold text-gray-900">
-              {formatCurrency(budget)}
+              {displayCurrency(budget)}
             </p>
           </div>
 
@@ -377,7 +392,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
               Allocation entered
             </p>
             <p className="mt-2 text-2xl font-semibold text-gray-900">
-              {formatPercent(totalAllocation)}
+              {displayPercent(totalAllocation)}
             </p>
           </div>
 
@@ -394,7 +409,7 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                     : "text-emerald-700"
               }`}
             >
-              {formatPercent(allocationGap)}
+              {displayPercent(allocationGap)}
             </p>
           </div>
         </div>
@@ -402,13 +417,15 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
         <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
             Fresh quotes:{" "}
-            {draftAssets.length - staleQuoteCount - manualPriceCount}
+            {hideValues
+              ? HIDDEN_VALUE
+              : draftAssets.length - staleQuoteCount - manualPriceCount}
           </span>
           <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
-            Stale quotes: {staleQuoteCount}
+            Stale quotes: {hideValues ? HIDDEN_VALUE : staleQuoteCount}
           </span>
           <span className="rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-gray-700">
-            Manual prices: {manualPriceCount}
+            Manual prices: {hideValues ? HIDDEN_VALUE : manualPriceCount}
           </span>
         </div>
 
@@ -616,17 +633,17 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
                       </td>
                       <td className="align-top px-3 py-2 text-right font-medium text-gray-700">
                         <div className="px-3 py-2">
-                          {formatCurrency(asset.plannedAmount)}
+                          {displayCurrency(asset.plannedAmount)}
                         </div>
                       </td>
                       <td className="align-top px-3 py-2 text-right font-medium text-[#1E7A18]">
                         <div className="px-3 py-2">
-                          {formatShares(asset.plannedShares)}
+                          {displayShares(asset.plannedShares)}
                         </div>
                       </td>
                       <td className="align-top px-3 py-2 text-right font-medium text-amber-700">
                         <div className="px-3 py-2">
-                          {formatCurrency(asset.leftoverAmount)}
+                          {displayCurrency(asset.leftoverAmount)}
                         </div>
                       </td>
                       <td className="align-top px-3 py-2 text-right">
@@ -653,13 +670,10 @@ export default function InvestmentPlannerPage({ accountUserId }: Props) {
         <div className="flex items-start gap-3">
           <Calculator size={18} className="mt-0.5 text-gray-400" />
           <p>
-            Example: with a monthly budget of {formatCurrency(1000)} and VOO at
-            45% with a price of {formatCurrency(550)} and a buy step of 1, the
-            planner will target {formatCurrency(450)} but round down to{" "}
-            {formatShares(0)} whole shares. If the buy step were 0.01, it would
-            recommend about{" "}
-            {formatShares(roundDownToIncrement(450 / 550, 0.01))} shares
-            instead.
+            {maskInlineNumbers(
+              `Example: with a monthly budget of ${formatCurrency(1000)} and VOO at 45% with a price of ${formatCurrency(550)} and a buy step of 1, the planner will target ${formatCurrency(450)} but round down to ${formatShares(0)} whole shares. If the buy step were 0.01, it would recommend about ${formatShares(roundDownToIncrement(450 / 550, 0.01))} shares instead.`,
+              hideValues,
+            )}
           </p>
         </div>
       </div>

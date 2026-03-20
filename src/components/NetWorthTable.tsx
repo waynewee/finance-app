@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { type Category, MONTHS } from "../data/defaultCategories";
+import { HIDDEN_VALUE } from "../lib/valueMasking";
 
 interface CellPosition {
   sub: string;
@@ -8,6 +9,7 @@ interface CellPosition {
 }
 
 interface Props {
+  hideValues: boolean;
   year: number;
   categories: Category[];
   getValue: (year: number, monthIndex: number, subcategoryId: string) => number;
@@ -36,6 +38,7 @@ function parseCurrency(s: string): number {
 }
 
 export default function NetWorthTable({
+  hideValues,
   year,
   categories,
   getValue,
@@ -172,6 +175,8 @@ export default function NetWorthTable({
       (sum, _, i) => sum + getCategoryMonthTotal(year, i, catId),
       0,
     );
+  const displayTableValue = (value: number): string =>
+    hideValues ? HIDDEN_VALUE : formatNumber(value);
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
@@ -202,11 +207,11 @@ export default function NetWorthTable({
             </td>
             {monthTotals.map((total, i) => (
               <td key={i} className="px-3 py-3 text-right">
-                {formatNumber(total)}
+                {displayTableValue(total)}
               </td>
             ))}
             <td className="bg-[#248814] px-3 py-3 text-right">
-              {formatNumber(grandTotal)}
+              {displayTableValue(grandTotal)}
             </td>
           </tr>
 
@@ -235,14 +240,12 @@ export default function NetWorthTable({
                         key={i}
                         className="px-3 py-2 text-right font-semibold text-[#1E7A18]"
                       >
-                        {total !== 0 ? formatNumber(total) : ""}
+                        {displayTableValue(total)}
                       </td>
                     );
                   })}
                   <td className="bg-[#E1F4DB] px-3 py-2 text-right font-semibold text-[#1E7A18]">
-                    {catRowTotal(cat.id) !== 0
-                      ? formatNumber(catRowTotal(cat.id))
-                      : ""}
+                    {displayTableValue(catRowTotal(cat.id))}
                   </td>
                 </tr>
 
@@ -398,7 +401,9 @@ export default function NetWorthTable({
                                     : ""
                                 }`}
                               >
-                                {val !== 0 ? (
+                                {hideValues ? (
+                                  HIDDEN_VALUE
+                                ) : val !== 0 ? (
                                   formatNumber(val)
                                 ) : (
                                   <span className="text-gray-300">—</span>
@@ -409,9 +414,7 @@ export default function NetWorthTable({
                         );
                       })}
                       <td className="px-3 py-2 text-right text-gray-500 bg-gray-50">
-                        {rowTotal(sub.id) !== 0
-                          ? formatNumber(rowTotal(sub.id))
-                          : ""}
+                        {displayTableValue(rowTotal(sub.id))}
                       </td>
                     </tr>
                   ))}

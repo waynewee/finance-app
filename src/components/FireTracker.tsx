@@ -24,6 +24,11 @@ import type {
   RetirementMemberProjection,
 } from "../lib/retirementSystem";
 import { getLatestRetirementBalancePeriod } from "../lib/retirementSystem";
+import {
+  HIDDEN_VALUE,
+  maskDisplayValue,
+  maskInlineNumbers,
+} from "../lib/valueMasking";
 
 interface LatestSnapshot {
   year: number;
@@ -32,6 +37,7 @@ interface LatestSnapshot {
 }
 
 interface Props {
+  hideValues: boolean;
   fireSettings: FireSettings;
   snapshots: FireProjectionSnapshot[];
   selectedSnapshot: LatestSnapshot | null;
@@ -173,6 +179,7 @@ function formatMemberIncome(member: RetirementMemberProjection): string {
 }
 
 export default function FireTracker({
+  hideValues,
   fireSettings,
   snapshots,
   selectedSnapshot,
@@ -272,26 +279,48 @@ export default function FireTracker({
   ).size;
   const configuredAccountCount =
     configuredRetirementSystem?.accounts.length ?? 0;
+  const displayCurrency = (value: number): string =>
+    maskDisplayValue(formatCurrency(value), hideValues);
+  const displayNegativeCurrency = (value: number): string =>
+    maskDisplayValue(formatNegativeCurrency(value), hideValues);
+  const displaySignedCurrency = (value: number): string =>
+    maskDisplayValue(formatSignedCurrency(value), hideValues);
+  const displayPercent = (value: number): string =>
+    maskDisplayValue(formatPercent(value), hideValues);
+  const displayAge = (value: number | null): string =>
+    maskDisplayValue(formatAge(value), hideValues);
+  const displayMemberIncome = (member: RetirementMemberProjection): string =>
+    hideValues ? HIDDEN_VALUE : formatMemberIncome(member);
+  const displayInlineText = (text: string): string =>
+    maskInlineNumbers(text, hideValues);
+  const displayCalendarYear = (year: number): string =>
+    hideValues ? HIDDEN_VALUE : String(year);
 
   const cards = [
     {
       label: "FIRE Number",
-      value: formatCurrency(projection?.fireNumber ?? 0),
-      helper: `${formatCurrency(fireSettings.annualSpendingGoal)} spending at ${formatPercent(fireSettings.withdrawalRate)}`,
+      value: displayCurrency(projection?.fireNumber ?? 0),
+      helper: displayInlineText(
+        `${formatCurrency(fireSettings.annualSpendingGoal)} spending at ${formatPercent(fireSettings.withdrawalRate)}`,
+      ),
       icon: Flame,
       accent: "from-amber-500/20 to-red-500/10 text-orange-700",
     },
     {
       label: "Current Progress",
-      value: formatPercent(fundedPercent),
-      helper: `${formatCurrency(projection?.gapToGoal ?? 0)} still to go from ${formatCurrency(projection?.accessibleNetWorth ?? 0)} accessible today`,
+      value: displayPercent(fundedPercent),
+      helper: displayInlineText(
+        `${formatCurrency(projection?.gapToGoal ?? 0)} still to go from ${formatCurrency(projection?.accessibleNetWorth ?? 0)} accessible today`,
+      ),
       icon: Landmark,
       accent: "from-orange-500/15 to-red-500/10 text-red-700",
     },
     {
       label: "Time To FIRE",
-      value: timeToFireValue,
-      helper: `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
+      value: maskDisplayValue(timeToFireValue, hideValues),
+      helper: displayInlineText(
+        `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
+      ),
       icon: TrendingUp,
       accent: "from-orange-400/20 to-amber-500/10 text-orange-700",
       hasSavingsAverageToggle: true,
@@ -301,17 +330,19 @@ export default function FireTracker({
       value:
         projection?.requiredMonthlyContribution == null
           ? "Set age target"
-          : formatCurrency(projection.requiredMonthlyContribution),
+          : displayCurrency(projection.requiredMonthlyContribution),
       helper:
-        currentAge == null
-          ? [targetAgeSummary, targetAgeMathSummary].filter(Boolean).join(" ")
-          : [
-              targetAgeSummary,
-              `Current age: ${currentAge}.`,
-              targetAgeMathSummary,
-            ]
-              .filter(Boolean)
-              .join(" "),
+        displayInlineText(
+          currentAge == null
+            ? [targetAgeSummary, targetAgeMathSummary].filter(Boolean).join(" ")
+            : [
+                targetAgeSummary,
+                `Current age: ${currentAge}.`,
+                targetAgeMathSummary,
+              ]
+                .filter(Boolean)
+                .join(" "),
+        ),
       icon: Goal,
       accent: "from-red-500/20 to-orange-500/10 text-red-700",
     },
@@ -320,19 +351,19 @@ export default function FireTracker({
     ? [
         {
           label: "Liquid",
-          value: formatCurrency(retirementProjection.breakdown.liquid),
+          value: displayCurrency(retirementProjection.breakdown.liquid),
         },
         {
           label: "Semi-liquid",
-          value: formatCurrency(retirementProjection.breakdown.semiLiquid),
+          value: displayCurrency(retirementProjection.breakdown.semiLiquid),
         },
         {
           label: "Locked",
-          value: formatCurrency(retirementProjection.breakdown.locked),
+          value: displayCurrency(retirementProjection.breakdown.locked),
         },
         {
           label: "Restricted",
-          value: formatCurrency(retirementProjection.breakdown.restricted),
+          value: displayCurrency(retirementProjection.breakdown.restricted),
         },
       ]
     : [];
@@ -796,9 +827,9 @@ export default function FireTracker({
           </div>
 
           <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            Gross net worth is {formatCurrency(projection.grossNetWorth)} from
+            Gross net worth is {displayCurrency(projection.grossNetWorth)} from
             your selected recorded net worth. FIRE progress uses{" "}
-            {formatCurrency(projection.accessibleNetWorth)} after excluding
+            {displayCurrency(projection.accessibleNetWorth)} after excluding
             retirement balances that are not yet available under the configured
             withdrawal rules.
           </div>
@@ -807,7 +838,7 @@ export default function FireTracker({
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               Previous-month FIRE view is saved as your preference, but there is
               no earlier recorded month yet, so the tracker is using{" "}
-              {selectedMonthLabel}.
+              {hideValues ? HIDDEN_VALUE : selectedMonthLabel}.
             </div>
           ) : null}
 
@@ -846,7 +877,7 @@ export default function FireTracker({
                       Est. income
                     </p>
                     <p className="text-sm font-semibold text-green-700">
-                      {formatCurrency(
+                      {displayCurrency(
                         retirementProjection.estimatedMonthlyRetirementIncome,
                       )}
                       /mo
@@ -872,20 +903,14 @@ export default function FireTracker({
 
                 <div className="mt-4 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm text-gray-600">
                   Payout phase starts at age{" "}
-                  {retirementProjection.payoutStartAge ?? "n/a"}. Restricted
+                  {hideValues
+                    ? HIDDEN_VALUE
+                    : retirementProjection.payoutStartAge ?? "n/a"}
+                  . Restricted
                   balances stay excluded from usable FIRE assets.
-                  {fireSettings.preFireAnnualSpending > 0
-                    ? ` Pre-FIRE spending is estimated at ${formatCurrency(fireSettings.preFireAnnualSpending)} per year.`
-                    : ""}
-                  {fireSettings.annualSpendingGoal > 0
-                    ? ` Projected spending of ${formatCurrency(fireSettings.annualSpendingGoal)} per year is deducted during drawdown.`
-                    : ""}
-                  {fireSettings.retirementContributionStopAge != null
-                    ? ` Retirement contributions stop at age ${fireSettings.retirementContributionStopAge}.`
-                    : ""}
-                  {projectionDeadlineAge != null
-                    ? ` Projection horizon ends at age ${projectionDeadlineAge}.`
-                    : ""}
+                  {displayInlineText(
+                    `${fireSettings.preFireAnnualSpending > 0 ? ` Pre-FIRE spending is estimated at ${formatCurrency(fireSettings.preFireAnnualSpending)} per year.` : ""}${fireSettings.annualSpendingGoal > 0 ? ` Projected spending of ${formatCurrency(fireSettings.annualSpendingGoal)} per year is deducted during drawdown.` : ""}${fireSettings.retirementContributionStopAge != null ? ` Retirement contributions stop at age ${fireSettings.retirementContributionStopAge}.` : ""}${projectionDeadlineAge != null ? ` Projection horizon ends at age ${projectionDeadlineAge}.` : ""}`,
+                  )}
                 </div>
               </section>
 
@@ -913,8 +938,8 @@ export default function FireTracker({
                                 {member.name}
                               </p>
                               <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                Age {formatAge(member.currentAge)} · Income{" "}
-                                {formatMemberIncome(member)}/mo
+                                Age {displayAge(member.currentAge)} · Income{" "}
+                                {displayMemberIncome(member)}/mo
                               </p>
                             </div>
                             <div className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-left sm:w-auto sm:text-right">
@@ -922,21 +947,20 @@ export default function FireTracker({
                                 Income
                               </p>
                               <p className="text-sm font-semibold text-gray-900">
-                                {formatMemberIncome(member)}/mo
+                                {displayMemberIncome(member)}/mo
                               </p>
                             </div>
                           </div>
                           <p className="mt-4 text-lg font-semibold text-gray-900">
-                            {formatCurrency(member.currentBalance)}
+                            {displayCurrency(member.currentBalance)}
                           </p>
                           <p className="mt-1 text-sm text-gray-600">
                             Current retirement balance
                           </p>
                           <p className="mt-3 text-sm text-gray-600">
-                            {formatCurrency(member.projectedBalance)} at end of
-                            timeline ·{" "}
-                            {formatCurrency(member.estimatedMonthlyIncome)}/mo
-                            income
+                            {displayInlineText(
+                              `${formatCurrency(member.projectedBalance)} at end of timeline · ${formatCurrency(member.estimatedMonthlyIncome)}/mo income`,
+                            )}
                           </p>
                         </article>
                       ))}
@@ -969,10 +993,9 @@ export default function FireTracker({
                               {account.memberName ?? "Household"} · {formatClassification(account.classification)}
                             </p>
                             <p className="mt-2 text-xs text-gray-500">
-                              {formatPercent(account.annualReturnRate)} return
-                              {account.minimumWithdrawalAge != null
-                                ? ` · age ${account.minimumWithdrawalAge}+`
-                                : ""}
+                              {displayInlineText(
+                                `${formatPercent(account.annualReturnRate)} return${account.minimumWithdrawalAge != null ? ` · age ${account.minimumWithdrawalAge}+` : ""}`,
+                              )}
                             </p>
                           </div>
                           <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -981,7 +1004,7 @@ export default function FireTracker({
                                 Current
                               </dt>
                               <dd className="mt-1 font-semibold text-gray-900">
-                                {formatCurrency(account.currentBalance)}
+                                {displayCurrency(account.currentBalance)}
                               </dd>
                             </div>
                             <div>
@@ -991,7 +1014,7 @@ export default function FireTracker({
                               <dd className="mt-1 font-semibold text-gray-900">
                                 {account.projectedBalanceAtPayout == null
                                   ? "n/a"
-                                  : formatCurrency(account.projectedBalanceAtPayout)}
+                                  : displayCurrency(account.projectedBalanceAtPayout)}
                               </dd>
                             </div>
                             <div>
@@ -999,7 +1022,7 @@ export default function FireTracker({
                                 End timeline
                               </dt>
                               <dd className="mt-1 font-semibold text-gray-900">
-                                {formatCurrency(account.projectedBalance)}
+                                {displayCurrency(account.projectedBalance)}
                               </dd>
                             </div>
                             <div>
@@ -1008,7 +1031,7 @@ export default function FireTracker({
                               </dt>
                               <dd className="mt-1 font-semibold text-green-700">
                                 {account.estimatedMonthlyIncome > 0
-                                  ? `${formatCurrency(account.estimatedMonthlyIncome)}/mo`
+                                  ? `${displayCurrency(account.estimatedMonthlyIncome)}/mo`
                                   : "n/a"}
                               </dd>
                             </div>
@@ -1045,11 +1068,9 @@ export default function FireTracker({
                                     {account.name}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {formatPercent(account.annualReturnRate)}{" "}
-                                    return
-                                    {account.minimumWithdrawalAge != null
-                                      ? ` · age ${account.minimumWithdrawalAge}+`
-                                      : ""}
+                                    {displayInlineText(
+                                      `${formatPercent(account.annualReturnRate)} return${account.minimumWithdrawalAge != null ? ` · age ${account.minimumWithdrawalAge}+` : ""}`,
+                                    )}
                                   </p>
                                 </div>
                               </td>
@@ -1057,21 +1078,21 @@ export default function FireTracker({
                                 {formatClassification(account.classification)}
                               </td>
                               <td className="px-4 py-3 text-gray-900">
-                                {formatCurrency(account.currentBalance)}
+                                {displayCurrency(account.currentBalance)}
                               </td>
                               <td className="px-4 py-3 text-gray-900">
                                 {account.projectedBalanceAtPayout == null
                                   ? "n/a"
-                                  : formatCurrency(
+                                  : displayCurrency(
                                       account.projectedBalanceAtPayout,
                                     )}
                               </td>
                               <td className="px-4 py-3 text-gray-900">
-                                {formatCurrency(account.projectedBalance)}
+                                {displayCurrency(account.projectedBalance)}
                               </td>
                               <td className="px-4 py-3 text-green-700">
                                 {account.estimatedMonthlyIncome > 0
-                                  ? `${formatCurrency(account.estimatedMonthlyIncome)}/mo`
+                                  ? `${displayCurrency(account.estimatedMonthlyIncome)}/mo`
                                   : "n/a"}
                               </td>
                             </tr>
@@ -1089,7 +1110,9 @@ export default function FireTracker({
                     </h3>
                     <p className="mt-1 text-sm text-gray-500">
                       {projectionDeadlineAge != null
-                        ? `Retirement-phase checkpoints from the FIRE year through age ${projectionDeadlineAge}.`
+                        ? displayInlineText(
+                            `Retirement-phase checkpoints from the FIRE year through age ${projectionDeadlineAge}.`,
+                          )
                         : "Retirement-phase checkpoints starting from the FIRE year."}
                     </p>
                   </div>
@@ -1106,27 +1129,36 @@ export default function FireTracker({
                                 <p className="text-sm font-semibold text-gray-900">
                                   {index === 0
                                     ? "FIRE year"
-                                    : `+${point.yearOffset - projectionHighlights[0].yearOffset} yr`}
+                                    : hideValues
+                                      ? HIDDEN_VALUE
+                                      : `+${point.yearOffset - projectionHighlights[0].yearOffset} yr`}
                                 </p>
                                 <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                  {getProjectionCalendarYear(selectedSnapshot, point.month)}
+                                  {displayCalendarYear(
+                                    getProjectionCalendarYear(
+                                      selectedSnapshot,
+                                      point.month,
+                                    ),
+                                  )}
                                 </p>
                               </div>
                               <p className="text-xs uppercase tracking-wide text-gray-400">
                                 {point.age == null
                                   ? "Age n/a"
-                                  : `Age ${point.age.toFixed(0)}`}
+                                  : hideValues
+                                    ? `Age ${HIDDEN_VALUE}`
+                                    : `Age ${point.age.toFixed(0)}`}
                               </p>
                             </div>
                             <p className="mt-3 text-lg font-semibold text-gray-900">
-                              {formatCurrency(point.totalBalance)}
+                              {displayCurrency(point.totalBalance)}
                             </p>
                             <p className="mt-1 text-sm text-gray-600">
-                              {formatCurrency(point.accessibleBalance)} usable for
+                              {displayCurrency(point.accessibleBalance)} usable for
                               FIRE
                             </p>
                             <p className="mt-1 text-sm text-green-700">
-                              {formatCurrency(point.estimatedMonthlyIncome)}/mo
+                              {displayCurrency(point.estimatedMonthlyIncome)}/mo
                               retirement income
                             </p>
                           </article>
@@ -1137,13 +1169,9 @@ export default function FireTracker({
                           Show projection math
                         </summary>
                         <p className="mt-3 text-sm text-gray-600">
-                          Each row starts from the first drawdown checkpoint balance of{" "}
-                          {formatCurrency(projectionStartTotal)}. The contribution,
-                          growth, and expense columns show change since the prior
-                          displayed checkpoint, while total, usable FIRE assets, and
-                          income remain absolute balances at that checkpoint.
-                          This table only shows the drawdown phase, when projected
-                          spending is actually being deducted.
+                          {displayInlineText(
+                            `Each row starts from the first drawdown checkpoint balance of ${formatCurrency(projectionStartTotal)}. The contribution, growth, and expense columns show change since the prior displayed checkpoint, while total, usable FIRE assets, and income remain absolute balances at that checkpoint. This table only shows the drawdown phase, when projected spending is actually being deducted.`,
+                          )}
                         </p>
                         <div className="mt-4 space-y-3 lg:hidden">
                           {projectionMathRows.map((row) => (
@@ -1156,14 +1184,16 @@ export default function FireTracker({
                                   <p className="text-sm font-semibold text-gray-900">
                                     {row.point.age == null
                                       ? "Age n/a"
-                                      : `Age ${row.point.age.toFixed(0)}`}
+                                      : hideValues
+                                        ? `Age ${HIDDEN_VALUE}`
+                                        : `Age ${row.point.age.toFixed(0)}`}
                                   </p>
                                   <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                    {formatCurrency(row.point.totalBalance)} total
+                                    {displayCurrency(row.point.totalBalance)} total
                                   </p>
                                 </div>
                                 <p className="text-sm font-semibold text-orange-700">
-                                  {formatCurrency(row.point.estimatedMonthlyIncome)}/mo
+                                  {displayCurrency(row.point.estimatedMonthlyIncome)}/mo
                                 </p>
                               </div>
                               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -1172,7 +1202,7 @@ export default function FireTracker({
                                     Liquid added
                                   </dt>
                                   <dd className="mt-1 font-medium text-gray-900">
-                                    {formatSignedCurrency(row.liquidChange)}
+                                    {displaySignedCurrency(row.liquidChange)}
                                   </dd>
                                 </div>
                                 <div>
@@ -1180,7 +1210,7 @@ export default function FireTracker({
                                     Retirement added
                                   </dt>
                                   <dd className="mt-1 font-medium text-gray-900">
-                                    {formatSignedCurrency(row.retirementChange)}
+                                    {displaySignedCurrency(row.retirementChange)}
                                   </dd>
                                 </div>
                                 <div>
@@ -1188,7 +1218,7 @@ export default function FireTracker({
                                     Growth
                                   </dt>
                                   <dd className="mt-1 font-medium text-gray-900">
-                                    {formatSignedCurrency(row.growthChange)}
+                                    {displaySignedCurrency(row.growthChange)}
                                   </dd>
                                 </div>
                                 <div>
@@ -1196,7 +1226,7 @@ export default function FireTracker({
                                     Expenses
                                   </dt>
                                   <dd className="mt-1 font-medium text-gray-900">
-                                    {formatNegativeCurrency(row.expenseChange)}
+                                    {displayNegativeCurrency(row.expenseChange)}
                                   </dd>
                                 </div>
                                 <div>
@@ -1204,7 +1234,7 @@ export default function FireTracker({
                                     FIRE usable
                                   </dt>
                                   <dd className="mt-1 font-medium text-gray-900">
-                                    {formatCurrency(row.point.accessibleBalance)}
+                                    {displayCurrency(row.point.accessibleBalance)}
                                   </dd>
                                 </div>
                                 <div>
@@ -1212,9 +1242,11 @@ export default function FireTracker({
                                     Calendar year
                                   </dt>
                                   <dd className="mt-1 font-medium text-gray-900">
-                                    {getProjectionCalendarYear(
-                                      selectedSnapshot,
-                                      row.point.month,
+                                    {displayCalendarYear(
+                                      getProjectionCalendarYear(
+                                        selectedSnapshot,
+                                        row.point.month,
+                                      ),
                                     )}
                                   </dd>
                                 </div>
@@ -1258,28 +1290,30 @@ export default function FireTracker({
                                   <td className="sticky left-0 z-10 bg-white px-4 py-3 text-gray-600">
                                     {row.point.age == null
                                       ? "n/a"
-                                      : row.point.age.toFixed(0)}
+                                      : hideValues
+                                        ? HIDDEN_VALUE
+                                        : row.point.age.toFixed(0)}
                                   </td>
                                   <td className="px-4 py-3 text-gray-900">
-                                    {formatSignedCurrency(row.liquidChange)}
+                                    {displaySignedCurrency(row.liquidChange)}
                                   </td>
                                   <td className="px-4 py-3 text-gray-900">
-                                    {formatSignedCurrency(row.retirementChange)}
+                                    {displaySignedCurrency(row.retirementChange)}
                                   </td>
                                   <td className="px-4 py-3 text-gray-900">
-                                    {formatSignedCurrency(row.growthChange)}
+                                    {displaySignedCurrency(row.growthChange)}
                                   </td>
                                   <td className="px-4 py-3 text-gray-900">
-                                    {formatNegativeCurrency(row.expenseChange)}
+                                    {displayNegativeCurrency(row.expenseChange)}
                                   </td>
                                   <td className="px-4 py-3 text-gray-900">
-                                    {formatCurrency(row.point.totalBalance)}
+                                    {displayCurrency(row.point.totalBalance)}
                                   </td>
                                   <td className="px-4 py-3 text-gray-900">
-                                    {formatCurrency(row.point.accessibleBalance)}
+                                    {displayCurrency(row.point.accessibleBalance)}
                                   </td>
                                   <td className="px-4 py-3 text-orange-700">
-                                    {formatCurrency(
+                                    {displayCurrency(
                                       row.point.estimatedMonthlyIncome,
                                     )}
                                     /mo
@@ -1294,7 +1328,9 @@ export default function FireTracker({
                   ) : (
                     <div className="p-4 text-sm text-gray-600">
                       {projectionDeadlineAge != null
-                        ? `FIRE is not reached before age ${projectionDeadlineAge}, so there are no retirement-phase checkpoints to show.`
+                        ? displayInlineText(
+                            `FIRE is not reached before age ${projectionDeadlineAge}, so there are no retirement-phase checkpoints to show.`,
+                          )
                         : "FIRE is not reached within the current projection horizon, so there are no retirement-phase checkpoints to show."}
                     </div>
                   )}

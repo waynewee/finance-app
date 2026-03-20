@@ -1,8 +1,13 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
 import { type FireSnapshotPreference } from "../lib/firePreferences";
+import {
+  maskDisplayValue,
+  maskInlineNumbers,
+} from "../lib/valueMasking";
 
 interface Props {
+  hideValues: boolean;
   year: number;
   snapshots: Array<{
     year: number;
@@ -69,6 +74,7 @@ function trendTextColor(value: number): string {
 }
 
 export default function ProgressSummary({
+  hideValues,
   year,
   snapshots,
   comparisonMode,
@@ -207,7 +213,11 @@ export default function ProgressSummary({
           : `Across ${includedSnapshots.length} recorded months through ${formatMonthPeriod(anchorSnapshot.year, anchorSnapshot.monthIndex)}`,
       trendValue: averageMonthlyChange,
     },
-  ];
+  ].map((card) => ({
+    ...card,
+    value: maskDisplayValue(card.value, hideValues),
+    helper: maskInlineNumbers(card.helper, hideValues),
+  }));
 
   return (
     <section className="space-y-4">
