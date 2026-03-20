@@ -345,7 +345,7 @@ function App() {
                     void handleVerifyEmailOtp();
                   }
                 }}
-                placeholder="6-digit OTP"
+                placeholder="8-digit OTP"
                 className="mt-3 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
               />
 
