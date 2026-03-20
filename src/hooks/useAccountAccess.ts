@@ -6,6 +6,7 @@ import {
   claimPendingInvitations,
   ensureAccountProfile,
   inviteAccountCollaborator,
+  loadAccessibleAccountActivity,
   loadAccessibleAccounts,
   loadAccountCollaborators,
   loadPendingAccountInvitations,
@@ -50,6 +51,29 @@ function setStoredActiveAccountId(accountUserId: string | null): void {
   window.localStorage.removeItem(ACTIVE_ACCOUNT_STORAGE_KEY);
 }
 
+function getAccountActivityScore(
+  accountUserId: string,
+  activityByUserId: Record<
+    string,
+    {
+      hasCategories: boolean;
+      hasMonthlyValues: boolean;
+      hasFireSettings: boolean;
+    }
+  >,
+): number {
+  const activity = activityByUserId[accountUserId];
+  if (!activity) {
+    return 0;
+  }
+
+  return (
+    (activity.hasMonthlyValues ? 3 : 0) +
+    (activity.hasFireSettings ? 2 : 0) +
+    (activity.hasCategories ? 1 : 0)
+  );
+}
+
 export function useAccountAccess(user: User | null) {
   const userId = user?.id ?? null;
   const userEmail = user?.email ?? null;
@@ -71,15 +95,49 @@ export function useAccountAccess(user: User | null) {
     }
 
     await ensureAccountProfile(userId);
-    await claimPendingInvitations(userId, userEmail);
+    const claimedOwnerUserIds = await claimPendingInvitations(
+      userId,
+      userEmail,
+    );
 
     const nextAccounts = await loadAccessibleAccounts(userId);
     const storedAccountId = getStoredActiveAccountId();
-    const nextActiveAccountId = nextAccounts.some(
+    const hasStoredSelection = nextAccounts.some(
       (account) => account.userId === storedAccountId,
-    )
-      ? storedAccountId
-      : (nextAccounts[0]?.userId ?? userId);
+    );
+    let nextActiveAccountId = hasStoredSelection ? storedAccountId : null;
+
+    if (!nextActiveAccountId && claimedOwnerUserIds.length > 0) {
+      nextActiveAccountId =
+        claimedOwnerUserIds.find((ownerUserId) =>
+          nextAccounts.some((account) => account.userId === ownerUserId),
+        ) ?? null;
+    }
+
+    if (
+      nextAccounts.length > 1 &&
+      (!nextActiveAccountId || nextActiveAccountId === userId)
+    ) {
+      const activityByUserId = await loadAccessibleAccountActivity(
+        nextAccounts.map((account) => account.userId),
+      );
+      const ownScore = getAccountActivityScore(userId, activityByUserId);
+      const bestSharedAccount = nextAccounts
+        .filter((account) => account.role === "collaborator")
+        .map((account) => ({
+          userId: account.userId,
+          score: getAccountActivityScore(account.userId, activityByUserId),
+        }))
+        .sort((left, right) => right.score - left.score)[0];
+
+      if (bestSharedAccount && bestSharedAccount.score > ownScore) {
+        nextActiveAccountId = bestSharedAccount.userId;
+      }
+    }
+
+    if (!nextActiveAccountId) {
+      nextActiveAccountId = nextAccounts[0]?.userId ?? userId;
+    }
 
     setAccounts(nextAccounts);
     setActiveAccountId(nextActiveAccountId);

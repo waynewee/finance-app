@@ -19,6 +19,12 @@ export interface AccountInvitation {
   claimedAt: string | null;
 }
 
+export interface AccessibleAccountActivity {
+  hasCategories: boolean;
+  hasMonthlyValues: boolean;
+  hasFireSettings: boolean;
+}
+
 interface AccountCollaboratorRow {
   owner_user_id: string;
   collaborator_user_id: string;
@@ -64,10 +70,10 @@ export async function ensureAccountProfile(userId: string): Promise<void> {
 export async function claimPendingInvitations(
   userId: string,
   email: string | null | undefined,
-): Promise<void> {
+): Promise<string[]> {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
-    return;
+    return [];
   }
 
   const { data: invitations, error: invitationsError } = await supabase
@@ -85,7 +91,7 @@ export async function claimPendingInvitations(
   );
 
   if (pendingInvitations.length === 0) {
-    return;
+    return [];
   }
 
   const collaboratorRows = pendingInvitations.map((invitation) => ({
@@ -118,6 +124,10 @@ export async function claimPendingInvitations(
   if (claimError) {
     throw claimError;
   }
+
+  return dedupe(
+    pendingInvitations.map((invitation) => invitation.owner_user_id),
+  );
 }
 
 export async function loadAccessibleAccounts(
@@ -167,6 +177,58 @@ export async function loadAccessibleAccounts(
 
     return left.accountName.localeCompare(right.accountName);
   });
+}
+
+export async function loadAccessibleAccountActivity(
+  userIds: string[],
+): Promise<Record<string, AccessibleAccountActivity>> {
+  const uniqueUserIds = dedupe(userIds);
+  if (uniqueUserIds.length === 0) {
+    return {};
+  }
+
+  const [
+    { data: categoryRows, error: categoriesError },
+    { data: monthlyValueRows, error: monthlyValuesError },
+    { data: fireSettingsRows, error: fireSettingsError },
+  ] = await Promise.all([
+    supabase.from("categories").select("user_id").in("user_id", uniqueUserIds),
+    supabase
+      .from("monthly_values")
+      .select("user_id")
+      .in("user_id", uniqueUserIds),
+    supabase
+      .from("fire_settings")
+      .select("user_id")
+      .in("user_id", uniqueUserIds),
+  ]);
+
+  const error = categoriesError ?? monthlyValuesError ?? fireSettingsError;
+  if (error) {
+    throw error;
+  }
+
+  const categoryUserIds = new Set(
+    (categoryRows ?? []).map((row) => row.user_id as string),
+  );
+  const monthlyValueUserIds = new Set(
+    (monthlyValueRows ?? []).map((row) => row.user_id as string),
+  );
+  const fireSettingsUserIds = new Set(
+    (fireSettingsRows ?? []).map((row) => row.user_id as string),
+  );
+
+  return uniqueUserIds.reduce<Record<string, AccessibleAccountActivity>>(
+    (result, currentUserId) => {
+      result[currentUserId] = {
+        hasCategories: categoryUserIds.has(currentUserId),
+        hasMonthlyValues: monthlyValueUserIds.has(currentUserId),
+        hasFireSettings: fireSettingsUserIds.has(currentUserId),
+      };
+      return result;
+    },
+    {},
+  );
 }
 
 export async function loadAccountCollaborators(
