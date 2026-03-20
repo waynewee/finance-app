@@ -35,10 +35,7 @@ import {
   type FireSavingsAveragePreference,
   type FireSnapshotPreference,
 } from "./lib/firePreferences";
-import {
-  buildYearCsv,
-  parseYearCsv,
-} from "./lib/netWorthCsv";
+import { buildYearCsv, parseYearCsv } from "./lib/netWorthCsv";
 
 type AppPage = "net-worth" | "investment-planner";
 type NetWorthDisplay = "summary" | "fire" | "chart";
@@ -346,7 +343,10 @@ function App() {
                 value={pastedSignInLink}
                 onChange={(event) => setPastedSignInLink(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  if (
+                    event.key === "Enter" &&
+                    (event.metaKey || event.ctrlKey)
+                  ) {
                     event.preventDefault();
                     void handleCompleteSignInFromLink();
                   }
