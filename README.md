@@ -56,6 +56,7 @@ If the app starts without the required env vars, it now renders a setup screen i
 - If you want local development to always force localhost as the magic-link return target, set `VITE_MAGIC_LINK_REDIRECT_URL=http://localhost:5173/` in `.env.local`.
 - In Supabase Auth -> URL Configuration, add `http://localhost:5173/**` to Redirect URLs.
 - If you customized the Supabase email template, make sure it uses `{{ .RedirectTo }}` instead of `{{ .SiteURL }}` or Supabase will keep sending users to the production site URL.
+- iPhone home-screen installs run in a separate browser context from Safari. If Mail opens the magic link in Safari, copy the full sign-in link from the email and paste it into the app's sign-in screen to complete auth in the installed app.
 
 ## GitHub Pages
 

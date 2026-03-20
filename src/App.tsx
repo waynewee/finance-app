@@ -60,17 +60,28 @@ function App() {
   const [fireSavingsAveragePreference, setFireSavingsAveragePreference] =
     useState<FireSavingsAveragePreference>(3);
   const [email, setEmail] = useState("");
+  const [pastedSignInLink, setPastedSignInLink] = useState("");
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isSendingLink, setIsSendingLink] = useState(false);
+  const [isCompletingLink, setIsCompletingLink] = useState(false);
   const [csvNotice, setCsvNotice] = useState<string | null>(null);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const isStandaloneMode =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      (typeof navigator !== "undefined" &&
+        "standalone" in navigator &&
+        Boolean(
+          (navigator as Navigator & { standalone?: boolean }).standalone,
+        )));
 
   const {
     user,
     isLoading: isAuthLoading,
     error: authError,
     sendMagicLink,
+    completeSignInFromUrl,
     signOut,
   } = useSupabaseAuth();
 
@@ -211,6 +222,27 @@ function App() {
     setAuthNotice(null);
   };
 
+  const handleCompleteSignInFromLink = async () => {
+    const trimmedLink = pastedSignInLink.trim();
+
+    if (!trimmedLink) {
+      setAuthNotice("Paste the full sign-in link from the email.");
+      return;
+    }
+
+    setIsCompletingLink(true);
+
+    try {
+      await completeSignInFromUrl(trimmedLink);
+      setAuthNotice("Sign-in completed. Loading your account...");
+      setPastedSignInLink("");
+    } catch {
+      setAuthNotice(null);
+    } finally {
+      setIsCompletingLink(false);
+    }
+  };
+
   const latestSnapshot = getLatestSnapshot();
   const previousSnapshot = getPreviousSnapshot();
   const netWorthSnapshots = getNetWorthSnapshots();
@@ -299,6 +331,39 @@ function App() {
               <Mail size={16} />
               {isSendingLink ? "Sending link..." : "Email me a sign-in link"}
             </button>
+
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+              <p className="text-sm font-medium text-gray-800">
+                Paste a sign-in link
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                {isStandaloneMode
+                  ? "On iPhone home-screen installs, Mail opens Safari instead of this app. Copy the full sign-in link from the email and paste it here to finish signing in inside the installed app."
+                  : "If the email opens in another browser context, copy the full sign-in link from the email and paste it here."}
+              </p>
+
+              <textarea
+                value={pastedSignInLink}
+                onChange={(event) => setPastedSignInLink(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    void handleCompleteSignInFromLink();
+                  }
+                }}
+                rows={3}
+                placeholder="Paste the full sign-in URL from your email"
+                className="mt-3 w-full resize-y rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
+              />
+
+              <button
+                onClick={() => void handleCompleteSignInFromLink()}
+                disabled={isCompletingLink}
+                className="mt-3 flex w-full items-center justify-center rounded-xl border border-[#2CA01C] px-4 py-3 text-sm font-medium text-[#1E7A18] transition-colors hover:bg-[#EEF9EA] disabled:cursor-not-allowed disabled:border-[#9FD792] disabled:text-[#7FBF76]"
+              >
+                {isCompletingLink ? "Signing in..." : "Use pasted sign-in link"}
+              </button>
+            </div>
           </div>
 
           {authNotice ? (
@@ -323,6 +388,14 @@ function App() {
             invited email and the app will attach that shared data set
             automatically.
           </p>
+
+          {isStandaloneMode ? (
+            <p className="mt-3 text-xs leading-5 text-gray-500">
+              For iPhone home-screen use, do not tap the email link directly.
+              Copy the full sign-in link from Mail and paste it into this app so
+              the session is created in the installed app instead of Safari.
+            </p>
+          ) : null}
         </div>
       </div>
     );

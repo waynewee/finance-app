@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { type Session, type User } from "@supabase/supabase-js";
-import { sendMagicLinkEmail, supabase } from "../lib/supabase";
+import {
+  completeMagicLinkSignIn,
+  sendMagicLinkEmail,
+  supabase,
+} from "../lib/supabase";
 
 export function useSupabaseAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -65,6 +69,21 @@ export function useSupabaseAuth() {
     setError(null);
   }, []);
 
+  const completeSignInFromUrl = useCallback(async (callbackUrl: string) => {
+    try {
+      await completeMagicLinkSignIn(callbackUrl);
+    } catch (signInError) {
+      setError(
+        signInError instanceof Error
+          ? signInError.message
+          : "Failed to complete sign-in.",
+      );
+      throw signInError;
+    }
+
+    setError(null);
+  }, []);
+
   const signOut = useCallback(async () => {
     const { error: signOutError } = await supabase.auth.signOut();
 
@@ -82,6 +101,7 @@ export function useSupabaseAuth() {
     isLoading,
     error,
     sendMagicLink,
+    completeSignInFromUrl,
     signOut,
   };
 }
