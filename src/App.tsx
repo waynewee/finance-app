@@ -57,28 +57,20 @@ function App() {
   const [fireSavingsAveragePreference, setFireSavingsAveragePreference] =
     useState<FireSavingsAveragePreference>(3);
   const [email, setEmail] = useState("");
-  const [pastedSignInLink, setPastedSignInLink] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
   const [authNotice, setAuthNotice] = useState<string | null>(null);
-  const [isSendingLink, setIsSendingLink] = useState(false);
-  const [isCompletingLink, setIsCompletingLink] = useState(false);
+  const [isSendingSignInEmail, setIsSendingSignInEmail] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [csvNotice, setCsvNotice] = useState<string | null>(null);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const isStandaloneMode =
-    typeof window !== "undefined" &&
-    (window.matchMedia("(display-mode: standalone)").matches ||
-      (typeof navigator !== "undefined" &&
-        "standalone" in navigator &&
-        Boolean(
-          (navigator as Navigator & { standalone?: boolean }).standalone,
-        )));
 
   const {
     user,
     isLoading: isAuthLoading,
     error: authError,
-    sendMagicLink,
-    completeSignInFromUrl,
+    sendSignInEmail,
+    verifyEmailOtp,
     signOut,
   } = useSupabaseAuth();
 
@@ -189,24 +181,51 @@ function App() {
     }
   };
 
-  const handleSendMagicLink = async () => {
+  const handleSendSignInEmail = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setAuthNotice("Enter your email address to receive a sign-in link.");
+      setAuthNotice("Enter your email address to receive a sign-in code.");
       return;
     }
 
-    setIsSendingLink(true);
+    setIsSendingSignInEmail(true);
 
     try {
-      await sendMagicLink(trimmedEmail);
+      await sendSignInEmail(trimmedEmail);
       setAuthNotice(
-        `Magic link sent to ${trimmedEmail}. Open the email on this device to sign in.`,
+        `Sign-in email sent to ${trimmedEmail}. Enter the code from that email to sign in.`,
       );
     } catch {
       setAuthNotice(null);
     } finally {
-      setIsSendingLink(false);
+      setIsSendingSignInEmail(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    const trimmedEmail = email.trim();
+    const trimmedOtp = emailOtp.trim();
+
+    if (!trimmedEmail) {
+      setAuthNotice("Enter your email address before verifying the code.");
+      return;
+    }
+
+    if (!trimmedOtp) {
+      setAuthNotice("Enter the sign-in code from your email.");
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+
+    try {
+      await verifyEmailOtp(trimmedEmail, trimmedOtp);
+      setAuthNotice("Code accepted. Loading your account...");
+      setEmailOtp("");
+    } catch {
+      setAuthNotice(null);
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -217,27 +236,6 @@ function App() {
     setShowShareAccount(false);
     setActivePage("net-worth");
     setAuthNotice(null);
-  };
-
-  const handleCompleteSignInFromLink = async () => {
-    const trimmedLink = pastedSignInLink.trim();
-
-    if (!trimmedLink) {
-      setAuthNotice("Paste the full sign-in link from the email.");
-      return;
-    }
-
-    setIsCompletingLink(true);
-
-    try {
-      await completeSignInFromUrl(trimmedLink);
-      setAuthNotice("Sign-in completed. Loading your account...");
-      setPastedSignInLink("");
-    } catch {
-      setAuthNotice(null);
-    } finally {
-      setIsCompletingLink(false);
-    }
   };
 
   const latestSnapshot = getLatestSnapshot();
@@ -297,7 +295,9 @@ function App() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">Time to FIRE</h1>
-              <p className="text-sm text-gray-500">Sign in with a magic link</p>
+              <p className="text-sm text-gray-500">
+                Sign in with your email code
+              </p>
             </div>
           </div>
 
@@ -312,7 +312,7 @@ function App() {
                 onChange={(event) => setEmail(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    void handleSendMagicLink();
+                    void handleSendSignInEmail();
                   }
                 }}
                 placeholder="you@example.com"
@@ -321,47 +321,40 @@ function App() {
             </label>
 
             <button
-              onClick={() => void handleSendMagicLink()}
-              disabled={isSendingLink}
+              onClick={() => void handleSendSignInEmail()}
+              disabled={isSendingSignInEmail}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2CA01C] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#248814] disabled:cursor-not-allowed disabled:bg-[#9FD792]"
             >
               <Mail size={16} />
-              {isSendingLink ? "Sending link..." : "Email me a sign-in link"}
+              {isSendingSignInEmail ? "Sending OTP..." : "Email OTP"}
             </button>
 
             <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
               <p className="text-sm font-medium text-gray-800">
-                Paste a sign-in link
-              </p>
-              <p className="mt-1 text-xs leading-5 text-gray-500">
-                {isStandaloneMode
-                  ? "On iPhone home-screen installs, Mail opens Safari instead of this app. Copy the full sign-in link from the email and paste it here to finish signing in inside the installed app."
-                  : "If the email opens in another browser context, copy the full sign-in link from the email and paste it here."}
+                Enter your OTP
               </p>
 
-              <textarea
-                value={pastedSignInLink}
-                onChange={(event) => setPastedSignInLink(event.target.value)}
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={emailOtp}
+                onChange={(event) => setEmailOtp(event.target.value)}
                 onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    (event.metaKey || event.ctrlKey)
-                  ) {
-                    event.preventDefault();
-                    void handleCompleteSignInFromLink();
+                  if (event.key === "Enter") {
+                    void handleVerifyEmailOtp();
                   }
                 }}
-                rows={3}
-                placeholder="Paste the full sign-in URL from your email"
-                className="mt-3 w-full resize-y rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
+                placeholder="6-digit OTP"
+                className="mt-3 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
               />
 
               <button
-                onClick={() => void handleCompleteSignInFromLink()}
-                disabled={isCompletingLink}
+                onClick={() => void handleVerifyEmailOtp()}
+                disabled={isVerifyingOtp}
                 className="mt-3 flex w-full items-center justify-center rounded-xl border border-[#2CA01C] px-4 py-3 text-sm font-medium text-[#1E7A18] transition-colors hover:bg-[#EEF9EA] disabled:cursor-not-allowed disabled:border-[#9FD792] disabled:text-[#7FBF76]"
               >
-                {isCompletingLink ? "Signing in..." : "Use pasted sign-in link"}
+                {isVerifyingOtp ? "Checking OTP..." : "Confirm"}
               </button>
             </div>
           </div>
@@ -376,25 +369,6 @@ function App() {
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {authError}
             </div>
-          ) : null}
-
-          <p className="mt-6 text-xs leading-5 text-gray-500">
-            In Supabase Auth, add your local and deployed app URLs to the
-            redirect allow list.
-          </p>
-
-          <p className="mt-3 text-xs leading-5 text-gray-500">
-            If someone shared a household account with you, sign in with the
-            invited email and the app will attach that shared data set
-            automatically.
-          </p>
-
-          {isStandaloneMode ? (
-            <p className="mt-3 text-xs leading-5 text-gray-500">
-              For iPhone home-screen use, do not tap the email link directly.
-              Copy the full sign-in link from Mail and paste it into this app so
-              the session is created in the installed app instead of Safari.
-            </p>
           ) : null}
         </div>
       </div>

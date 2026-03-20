@@ -52,11 +52,12 @@ If the app starts without the required env vars, it now renders a setup screen i
 
 - This is a client-side Vite app, so your host should serve `index.html` for app routes.
 - The production build output directory is `dist`.
-- Magic-link auth redirects back to the current origin and pathname, so the deployed URL must be present in Supabase redirect settings.
+- Keep your local and deployed app URLs in Supabase redirect settings, even if you use email OTP.
 - If you want local development to always force localhost as the magic-link return target, set `VITE_MAGIC_LINK_REDIRECT_URL=http://localhost:5173/` in `.env.local`.
 - In Supabase Auth -> URL Configuration, add `http://localhost:5173/**` to Redirect URLs.
-- If you customized the Supabase email template, make sure it uses `{{ .RedirectTo }}` instead of `{{ .SiteURL }}` or Supabase will keep sending users to the production site URL.
-- iPhone home-screen installs run in a separate browser context from Safari. If Mail opens the magic link in Safari, copy the full sign-in link from the email and paste it into the app's sign-in screen to complete auth in the installed app.
+- For email-code sign-in, update the Supabase email template to use `{{ .Token }}` instead of `{{ .ConfirmationURL }}`.
+- If you still use links anywhere in your Supabase email templates, make sure they use `{{ .RedirectTo }}` instead of `{{ .SiteURL }}` or Supabase will keep sending users to the production site URL.
+- iPhone home-screen installs are most reliable with email OTP because the installed web app and Safari do not share auth storage.
 
 ## GitHub Pages
 

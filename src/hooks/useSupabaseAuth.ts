@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { type Session, type User } from "@supabase/supabase-js";
 import {
-  completeMagicLinkSignIn,
-  sendMagicLinkEmail,
+  sendSignInEmail,
   supabase,
+  verifyEmailOtpSignIn,
 } from "../lib/supabase";
 
 export function useSupabaseAuth() {
@@ -54,14 +54,14 @@ export function useSupabaseAuth() {
     };
   }, []);
 
-  const sendMagicLink = useCallback(async (email: string) => {
+  const sendSignInEmailLink = useCallback(async (email: string) => {
     try {
-      await sendMagicLinkEmail(email);
+      await sendSignInEmail(email);
     } catch (signInError) {
       setError(
         signInError instanceof Error
           ? signInError.message
-          : "Failed to send the sign-in link.",
+          : "Failed to send the sign-in email.",
       );
       throw signInError;
     }
@@ -69,14 +69,14 @@ export function useSupabaseAuth() {
     setError(null);
   }, []);
 
-  const completeSignInFromUrl = useCallback(async (callbackUrl: string) => {
+  const verifyEmailOtp = useCallback(async (email: string, token: string) => {
     try {
-      await completeMagicLinkSignIn(callbackUrl);
+      await verifyEmailOtpSignIn(email, token);
     } catch (signInError) {
       setError(
         signInError instanceof Error
           ? signInError.message
-          : "Failed to complete sign-in.",
+          : "Failed to verify the sign-in code.",
       );
       throw signInError;
     }
@@ -100,8 +100,8 @@ export function useSupabaseAuth() {
     user,
     isLoading,
     error,
-    sendMagicLink,
-    completeSignInFromUrl,
+    sendSignInEmail: sendSignInEmailLink,
+    verifyEmailOtp,
     signOut,
   };
 }
