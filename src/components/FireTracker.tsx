@@ -760,16 +760,6 @@ export default function FireTracker({
           </div>
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={handleOpenTimeToFireSettings}
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
-                >
-                  <Settings size={15} />
-                  Time to FIRE Settings
-                </button>
-              </div>
               <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
                 <button
                   type="button"
@@ -1216,6 +1206,16 @@ export default function FireTracker({
           </div>
         ) : (
           <>
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={handleOpenTimeToFireSettings}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+              >
+                <Settings size={15} />
+                Time to FIRE Settings
+              </button>
+            </div>
             <div
               className={`grid gap-4 md:grid-cols-2 ${showJobLossCard ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}
             >
