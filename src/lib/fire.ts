@@ -22,7 +22,7 @@ export interface FireProjection {
   accessibleNetWorth: number;
   grossNetWorth: number;
   inferredMonthlyContribution: number | null;
-  bonusMonthlyContribution: number;
+  recurringMonthlyContribution: number | null;
   currentMonthlyContribution: number | null;
   observedMonthlyNetWorthChange: number | null;
   retirementProjection: RetirementProjectionResult | null;
@@ -57,6 +57,26 @@ function projectBalance(
   }
 
   return balance;
+}
+
+function getRecurringMonthlyContribution(
+  inferredMonthlyContribution: number | null,
+  ttmBonusAmount: number,
+): number | null {
+  if (inferredMonthlyContribution == null) {
+    return null;
+  }
+
+  const recurringMonthlyContribution =
+    inferredMonthlyContribution - ttmBonusAmount / TRAILING_TWELVE_MONTH_COUNT;
+
+  return Number.isFinite(recurringMonthlyContribution)
+    ? Math.max(recurringMonthlyContribution, 0)
+    : null;
+}
+
+function getTtmOneOffMonthlyEquivalent(oneOffAmount: number): number {
+  return oneOffAmount / TRAILING_TWELVE_MONTH_COUNT;
 }
 
 function isValidDateOfBirth(value: string | null): value is string {
@@ -256,11 +276,11 @@ export function calculateFireProjection(
     snapshots?.currentSnapshot ?? null,
     snapshots?.previousSnapshots ?? [],
   );
-  const bonusMonthlyContribution = normalizedSettings.annualBonusAmount / 12;
-  const currentMonthlyContribution =
-    inferredMonthlyContribution == null
-      ? null
-      : inferredMonthlyContribution + bonusMonthlyContribution;
+  const recurringMonthlyContribution = getRecurringMonthlyContribution(
+    inferredMonthlyContribution,
+    normalizedSettings.annualBonusAmount,
+  );
+  const currentMonthlyContribution = inferredMonthlyContribution;
   const preFireMonthlySpending = normalizedSettings.preFireAnnualSpending / 12;
   const preFireMonthlyLiquidInflow =
     (currentMonthlyContribution ?? 0) + preFireMonthlySpending;
@@ -313,7 +333,7 @@ export function calculateFireProjection(
           targetYearsAway,
           normalizedSettings,
           currentAge,
-          currentMonthlyContribution ?? 0,
+          recurringMonthlyContribution ?? 0,
         );
 
   return {
@@ -328,7 +348,7 @@ export function calculateFireProjection(
     accessibleNetWorth,
     grossNetWorth,
     inferredMonthlyContribution,
-    bonusMonthlyContribution,
+    recurringMonthlyContribution,
     currentMonthlyContribution,
     observedMonthlyNetWorthChange,
     retirementProjection,
@@ -342,6 +362,29 @@ function inferMonthlyLiquidContribution(
 ): number | null {
   if (!currentSnapshot || previousSnapshots.length === 0) {
     return null;
+  }
+
+  const normalizedSettings = sanitizeFireSettings(settings);
+  const oldestPreviousSnapshot =
+    previousSnapshots[previousSnapshots.length - 1] ?? null;
+  const oneOffAmount = normalizedSettings.annualBonusAmount;
+
+  if (oldestPreviousSnapshot && oneOffAmount > 0) {
+    const recurringMonthlyContribution =
+      inferMonthlyLiquidContributionForInterval(
+        normalizedSettings,
+        currentSnapshot,
+        oldestPreviousSnapshot,
+        Math.max(currentSnapshot.total - oneOffAmount, 0),
+      );
+
+    if (recurringMonthlyContribution == null) {
+      return null;
+    }
+
+    return (
+      recurringMonthlyContribution + getTtmOneOffMonthlyEquivalent(oneOffAmount)
+    );
   }
 
   const intervalContributions: number[] = [];
@@ -376,6 +419,7 @@ function inferMonthlyLiquidContributionForInterval(
   settings: FireSettings,
   currentSnapshot: FireProjectionSnapshot,
   previousSnapshot: FireProjectionSnapshot,
+  actualEndingBalance = currentSnapshot.total,
 ): number | null {
   const monthsBetween = getMonthsBetweenPeriods(
     currentSnapshot,
@@ -400,7 +444,7 @@ function inferMonthlyLiquidContributionForInterval(
     );
     return inferMonthlyContributionFromModeledDelta(
       baseline,
-      currentSnapshot.total,
+      actualEndingBalance,
       monthlyReturnRate,
       monthsBetween,
     );
@@ -429,7 +473,7 @@ function inferMonthlyLiquidContributionForInterval(
       ?.totalBalance ?? previousSnapshot.total;
   return inferMonthlyContributionFromModeledDelta(
     modeledTotal,
-    currentSnapshot.total,
+    actualEndingBalance,
     monthlyReturnRate,
     monthsBetween,
   );

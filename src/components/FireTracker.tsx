@@ -129,6 +129,10 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+function formatMonthlyEquivalentFromOneOff(value: number): string {
+  return formatCurrency(value / 12);
+}
+
 function getProgressBarConfig(fundedPercent: number): ProgressBarConfig {
   const fillPercent = Math.min(Math.max(fundedPercent, 0), 100);
 
@@ -297,10 +301,29 @@ export default function FireTracker({
     : "No snapshot yet";
   const oldestSavingsSnapshot =
     savingsInferenceSnapshots[savingsInferenceSnapshots.length - 1] ?? null;
+  const oldestAvailableSnapshot =
+    orderedSnapshots[orderedSnapshots.length - 1] ?? null;
   const missingSavingsHistoryCount = Math.max(
     savingsLookbackMonths - priorSnapshotsForAverage.length,
     0,
   );
+  const ttmRangeStartLabel = oldestSavingsSnapshot
+    ? formatMonthPeriod(
+        oldestSavingsSnapshot.year,
+        oldestSavingsSnapshot.monthIndex,
+      )
+    : oldestAvailableSnapshot
+      ? formatMonthPeriod(
+          oldestAvailableSnapshot.year,
+          oldestAvailableSnapshot.monthIndex,
+        )
+      : null;
+  const ttmRangeLabel =
+    ttmRangeStartLabel && selectedSnapshot
+      ? `${ttmRangeStartLabel} to ${selectedMonthLabel}`
+      : selectedSnapshot
+        ? `the trailing 12 months ending ${selectedMonthLabel}`
+        : "the trailing 12-month range";
   const targetAgeSummary =
     projection?.targetYearsAway == null
       ? "Add your date of birth and target FIRE age in settings."
@@ -319,8 +342,8 @@ export default function FireTracker({
     !hasEnoughSavingsHistory ||
     projection?.currentMonthlyContribution == null
       ? `Add ${missingSavingsHistoryCount} earlier net worth ${missingSavingsHistoryCount === 1 ? "month" : "months"} to calculate your trailing 12-month liquid savings rate.`
-      : projection.bonusMonthlyContribution > 0
-        ? `${formatCurrency(projection.currentMonthlyContribution)} per month from trailing 12-month savings plus ${formatCurrency(fireSettings.annualBonusAmount)} in yearly bonus or lumpy contributions.`
+      : fireSettings.annualBonusAmount > 0
+        ? `${formatCurrency(projection.recurringMonthlyContribution ?? 0)} per month from the TTM after removing ${formatCurrency(fireSettings.annualBonusAmount)} of one-off inflows from ${ttmRangeLabel}, plus ${formatMonthlyEquivalentFromOneOff(fireSettings.annualBonusAmount)} per month as the normalized equivalent, for ${formatCurrency(projection.currentMonthlyContribution)} per month total.`
         : `${formatCurrency(projection.currentMonthlyContribution)} per month averaged across trailing 12 months from ${formatMonthPeriod(oldestSavingsSnapshot.year, oldestSavingsSnapshot.monthIndex)} to ${selectedMonthLabel}.`;
   const timeToFireValue =
     selectedSnapshot &&
@@ -767,19 +790,24 @@ export default function FireTracker({
                       Time to FIRE calculation
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      Configure the time-to-FIRE algorithm and any yearly bonus
-                      or lumpy savings amount.
+                      Configure the time-to-FIRE algorithm and any TTM-only
+                      bonus or one-off amount already included in the displayed
+                      history window.
                     </p>
                     <div className="mt-3 rounded-xl bg-white px-4 py-3">
                       <p className="text-sm font-medium text-gray-700">
                         Twelve trailing months (TTM)
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Bonus setting:{" "}
+                        TTM adjustment for{" "}
+                        {selectedSnapshot
+                          ? ttmRangeLabel
+                          : "the selected trailing 12-month window"}
+                        :{" "}
                         {hideValues
                           ? HIDDEN_VALUE
-                          : formatCurrency(fireSettings.annualBonusAmount)}{" "}
-                        per year.
+                          : formatCurrency(fireSettings.annualBonusAmount)}
+                        .
                       </p>
                       <button
                         type="button"
@@ -1516,15 +1544,19 @@ export default function FireTracker({
                   </span>
                   <span className="mt-1 block text-xs text-orange-700/80">
                     Uses the trailing 12 months of net worth history for the
-                    Time to FIRE calculation.
+                    Time to FIRE calculation. The adjustment field below only
+                    applies to this TTM algorithm.
                   </span>
                 </button>
               </div>
 
               <label className="block rounded-2xl border border-gray-200 bg-white px-4 py-3">
                 <span className="text-xs uppercase tracking-wide text-gray-400">
-                  Yearly bonus or large one-month amount
+                  Bonus or large one-off amount in TTM window
                 </span>
+                <p className="mt-2 text-xs leading-5 text-gray-500">
+                  Applies only to TTM and currently adjusts {ttmRangeLabel}.
+                </p>
                 <input
                   type="number"
                   min="0"
@@ -1539,8 +1571,10 @@ export default function FireTracker({
                   className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
                 <p className="mt-2 text-xs leading-5 text-gray-500">
-                  This amount is spread across the year and added to the monthly
-                  savings rate used by the projection.
+                  Enter the total bonus or other large one-off inflow already
+                  included in that date range. It will be removed from the
+                  trailing 12-month average so recurring savings are not
+                  overstated.
                 </p>
               </label>
 
