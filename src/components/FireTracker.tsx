@@ -251,10 +251,14 @@ export default function FireTracker({
   const [draftFireSettings, setDraftFireSettings] =
     useState<FireSettings>(fireSettings);
   const [draftTimeToFireSettings, setDraftTimeToFireSettings] = useState<
-    Pick<FireSettings, "timeToFireAlgorithm" | "annualBonusAmount">
+    Pick<
+      FireSettings,
+      "timeToFireAlgorithm" | "annualBonusAmount" | "nonRecurringBonusAmount"
+    >
   >({
     timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
     annualBonusAmount: fireSettings.annualBonusAmount,
+    nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
   });
 
   useEffect(() => {
@@ -262,6 +266,7 @@ export default function FireTracker({
     setDraftTimeToFireSettings({
       timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
       annualBonusAmount: fireSettings.annualBonusAmount,
+      nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
     });
   }, [fireSettings]);
   const savingsLookbackMonths = getFireCalculationLookbackMonths();
@@ -342,8 +347,22 @@ export default function FireTracker({
     !hasEnoughSavingsHistory ||
     projection?.currentMonthlyContribution == null
       ? `Add ${missingSavingsHistoryCount} earlier net worth ${missingSavingsHistoryCount === 1 ? "month" : "months"} to calculate your trailing 12-month liquid savings rate.`
-      : fireSettings.annualBonusAmount > 0
-        ? `${formatCurrency(projection.recurringMonthlyContribution ?? 0)} per month from the TTM after removing ${formatCurrency(fireSettings.annualBonusAmount)} of one-off inflows from ${ttmRangeLabel}, plus ${formatMonthlyEquivalentFromOneOff(fireSettings.annualBonusAmount)} per month as the normalized equivalent, for ${formatCurrency(projection.currentMonthlyContribution)} per month total.`
+      : fireSettings.annualBonusAmount > 0 ||
+          fireSettings.nonRecurringBonusAmount > 0
+        ? (() => {
+            const parts: string[] = [];
+            if (fireSettings.annualBonusAmount > 0) {
+              parts.push(
+                `removing ${formatCurrency(fireSettings.annualBonusAmount)} recurring annual inflow (normalized to ${formatMonthlyEquivalentFromOneOff(fireSettings.annualBonusAmount)}/mo)`,
+              );
+            }
+            if (fireSettings.nonRecurringBonusAmount > 0) {
+              parts.push(
+                `removing ${formatCurrency(fireSettings.nonRecurringBonusAmount)} non-recurring amount entirely`,
+              );
+            }
+            return `${formatCurrency(projection.currentMonthlyContribution)} per month from TTM (${ttmRangeLabel}) after ${parts.join(" and ")}.`;
+          })()
         : `${formatCurrency(projection.currentMonthlyContribution)} per month averaged across trailing 12 months from ${formatMonthPeriod(oldestSavingsSnapshot.year, oldestSavingsSnapshot.monthIndex)} to ${selectedMonthLabel}.`;
   const timeToFireValue =
     selectedSnapshot &&
@@ -507,6 +526,7 @@ export default function FireTracker({
     setDraftTimeToFireSettings({
       timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
       annualBonusAmount: fireSettings.annualBonusAmount,
+      nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
     });
     setShowTimeToFireSettingsModal(true);
   };
@@ -517,6 +537,8 @@ export default function FireTracker({
         ...fireSettings,
         timeToFireAlgorithm: draftTimeToFireSettings.timeToFireAlgorithm,
         annualBonusAmount: draftTimeToFireSettings.annualBonusAmount,
+        nonRecurringBonusAmount:
+          draftTimeToFireSettings.nonRecurringBonusAmount,
       }),
     );
     setShowTimeToFireSettingsModal(false);
@@ -803,10 +825,16 @@ export default function FireTracker({
                         {selectedSnapshot
                           ? ttmRangeLabel
                           : "the selected trailing 12-month window"}
-                        :{" "}
+                        : recurring{" "}
                         {hideValues
                           ? HIDDEN_VALUE
                           : formatCurrency(fireSettings.annualBonusAmount)}
+                        , non-recurring{" "}
+                        {hideValues
+                          ? HIDDEN_VALUE
+                          : formatCurrency(
+                              fireSettings.nonRecurringBonusAmount,
+                            )}
                         .
                       </p>
                       <button
@@ -1552,10 +1580,12 @@ export default function FireTracker({
 
               <label className="block rounded-2xl border border-gray-200 bg-white px-4 py-3">
                 <span className="text-xs uppercase tracking-wide text-gray-400">
-                  Bonus or large one-off amount in TTM window
+                  <b>Recurring</b> annual bonus or large amount
                 </span>
                 <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Applies only to TTM and currently adjusts {ttmRangeLabel}.
+                  Applies only to TTM. Removes this amount from the trailing
+                  window and adds back a normalized monthly equivalent (
+                  {ttmRangeLabel}).
                 </p>
                 <input
                   type="number"
@@ -1570,12 +1600,30 @@ export default function FireTracker({
                   }
                   className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
+              </label>
+
+              <label className="block rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <span className="text-xs uppercase tracking-wide text-gray-400">
+                  <b>Non-recurring</b> bonus or large amount
+                </span>
                 <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Enter the total bonus or other large one-off inflow already
-                  included in that date range. It will be removed from the
-                  trailing 12-month average so recurring savings are not
-                  overstated.
+                  Applies only to TTM. Fully removes this one-time amount from
+                  the trailing window without adding anything back (
+                  {ttmRangeLabel}).
                 </p>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={draftTimeToFireSettings.nonRecurringBonusAmount}
+                  onChange={(event) =>
+                    setDraftTimeToFireSettings((prev) => ({
+                      ...prev,
+                      nonRecurringBonusAmount: parseNumber(event.target.value),
+                    }))
+                  }
+                  className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                />
               </label>
 
               <div className="flex items-center justify-end gap-3">

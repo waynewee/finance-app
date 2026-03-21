@@ -219,6 +219,7 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
     expectedAnnualReturn: settings.expectedAnnualReturn,
     timeToFireAlgorithm: settings.timeToFireAlgorithm === "ttm" ? "ttm" : "ttm",
     annualBonusAmount: Math.max(0, settings.annualBonusAmount),
+    nonRecurringBonusAmount: Math.max(0, settings.nonRecurringBonusAmount),
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
       ? settings.dateOfBirth
       : null,
@@ -368,22 +369,23 @@ function inferMonthlyLiquidContribution(
   const oldestPreviousSnapshot =
     previousSnapshots[previousSnapshots.length - 1] ?? null;
   const oneOffAmount = normalizedSettings.annualBonusAmount;
+  const nonRecurringAmount = normalizedSettings.nonRecurringBonusAmount;
+  const totalAdjustment = oneOffAmount + nonRecurringAmount;
 
-  if (oldestPreviousSnapshot && oneOffAmount > 0) {
-    const recurringMonthlyContribution =
-      inferMonthlyLiquidContributionForInterval(
-        normalizedSettings,
-        currentSnapshot,
-        oldestPreviousSnapshot,
-        Math.max(currentSnapshot.total - oneOffAmount, 0),
-      );
+  if (oldestPreviousSnapshot && totalAdjustment > 0) {
+    const baseMonthlyContribution = inferMonthlyLiquidContributionForInterval(
+      normalizedSettings,
+      currentSnapshot,
+      oldestPreviousSnapshot,
+      Math.max(currentSnapshot.total - totalAdjustment, 0),
+    );
 
-    if (recurringMonthlyContribution == null) {
+    if (baseMonthlyContribution == null) {
       return null;
     }
 
     return (
-      recurringMonthlyContribution + getTtmOneOffMonthlyEquivalent(oneOffAmount)
+      baseMonthlyContribution + getTtmOneOffMonthlyEquivalent(oneOffAmount)
     );
   }
 

@@ -11,6 +11,7 @@ export interface FireSettings {
   expectedAnnualReturn: number;
   timeToFireAlgorithm: FireTimeToFireAlgorithm;
   annualBonusAmount: number;
+  nonRecurringBonusAmount: number;
   dateOfBirth: string | null;
   targetFireAge: number | null;
   predictedDeathAge: number | null;
@@ -25,6 +26,7 @@ export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   expectedAnnualReturn: 7,
   timeToFireAlgorithm: "ttm",
   annualBonusAmount: 0,
+  nonRecurringBonusAmount: 0,
   dateOfBirth: null,
   targetFireAge: null,
   predictedDeathAge: null,
@@ -70,6 +72,7 @@ interface FireSettingsRow {
   expected_annual_return: number;
   time_to_fire_algorithm?: string | null;
   annual_bonus_amount?: number | null;
+  non_recurring_bonus_amount?: number | null;
   monthly_contribution: number;
   monthly_income?: number | null;
   retirement_system?: RetirementSystemConfig | null;
@@ -109,6 +112,7 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     expectedAnnualReturn: row.expected_annual_return,
     timeToFireAlgorithm,
     annualBonusAmount: row.annual_bonus_amount ?? 0,
+    nonRecurringBonusAmount: row.non_recurring_bonus_amount ?? 0,
     dateOfBirth:
       row.date_of_birth ?? inferDateOfBirthFromCurrentAge(row.current_age),
     targetFireAge: row.target_fire_age,
@@ -132,6 +136,7 @@ function mapFireSettingsToRow(
     expected_annual_return: settings.expectedAnnualReturn,
     time_to_fire_algorithm: settings.timeToFireAlgorithm,
     annual_bonus_amount: settings.annualBonusAmount,
+    non_recurring_bonus_amount: settings.nonRecurringBonusAmount,
     monthly_contribution: 0,
     monthly_income: 0,
     retirement_system: settings.retirementSystem,

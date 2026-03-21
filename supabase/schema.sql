@@ -389,6 +389,9 @@ add column if not exists time_to_fire_algorithm text not null default 'ttm';
 alter table public.fire_settings
 add column if not exists annual_bonus_amount numeric(16, 2) not null default 0;
 
+alter table public.fire_settings
+add column if not exists non_recurring_bonus_amount numeric(16, 2) not null default 0;
+
 do $$
 begin
   if exists (
