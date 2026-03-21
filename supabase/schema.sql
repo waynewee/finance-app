@@ -506,3 +506,9 @@ on public.investment_assets
 for delete
 to authenticated
 using (public.can_access_account(user_id));
+
+alter table public.fire_settings
+add column if not exists annual_bonus_month_added date;
+
+alter table public.fire_settings
+add column if not exists non_recurring_bonus_month_added date;

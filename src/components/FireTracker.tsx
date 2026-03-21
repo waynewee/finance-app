@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
+  Bell,
   Flame,
   Goal,
   Landmark,
@@ -234,6 +236,29 @@ function formatMemberIncome(member: RetirementMemberProjection): string {
   return formatCurrency(member.monthlyIncome);
 }
 
+function parseBonusMonthOrdinal(monthStr: string | null): number | null {
+  if (!monthStr) return null;
+  const [yearStr, monthNumStr] = monthStr.split("-");
+  const year = parseInt(yearStr ?? "", 10);
+  const month = parseInt(monthNumStr ?? "", 10) - 1;
+  if (isNaN(year) || isNaN(month) || month < 0 || month > 11) return null;
+  return year * 12 + month;
+}
+
+function isBonusMonthOutsideTtmWindow(
+  bonusMonthStr: string | null,
+  ttmStartOrdinal: number | null,
+  ttmEndOrdinal: number | null,
+): boolean {
+  if (!bonusMonthStr || ttmStartOrdinal == null || ttmEndOrdinal == null) {
+    return false;
+  }
+  const ordinal = parseBonusMonthOrdinal(bonusMonthStr);
+  return (
+    ordinal != null && (ordinal < ttmStartOrdinal || ordinal > ttmEndOrdinal)
+  );
+}
+
 export default function FireTracker({
   hideValues,
   fireSettings,
@@ -246,6 +271,8 @@ export default function FireTracker({
   onOpenRetirementConfig,
 }: Props) {
   const [activeView, setActiveView] = useState<FireTrackerView>("display");
+  const [showStalePopover, setShowStalePopover] = useState(false);
+  const stalePopoverRef = useRef<HTMLDivElement>(null);
   const [showTimeToFireSettingsModal, setShowTimeToFireSettingsModal] =
     useState(false);
   const [draftFireSettings, setDraftFireSettings] =
@@ -253,13 +280,33 @@ export default function FireTracker({
   const [draftTimeToFireSettings, setDraftTimeToFireSettings] = useState<
     Pick<
       FireSettings,
-      "timeToFireAlgorithm" | "annualBonusAmount" | "nonRecurringBonusAmount"
+      | "timeToFireAlgorithm"
+      | "annualBonusAmount"
+      | "nonRecurringBonusAmount"
+      | "annualBonusMonthAdded"
+      | "nonRecurringBonusMonthAdded"
     >
   >({
     timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
     annualBonusAmount: fireSettings.annualBonusAmount,
     nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+    annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
+    nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
   });
+
+  useEffect(() => {
+    if (!showStalePopover) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        stalePopoverRef.current &&
+        !stalePopoverRef.current.contains(event.target as Node)
+      ) {
+        setShowStalePopover(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showStalePopover]);
 
   useEffect(() => {
     setDraftFireSettings(fireSettings);
@@ -267,6 +314,8 @@ export default function FireTracker({
       timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
       annualBonusAmount: fireSettings.annualBonusAmount,
       nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+      annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
+      nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
     });
   }, [fireSettings]);
   const savingsLookbackMonths = getFireCalculationLookbackMonths();
@@ -329,6 +378,39 @@ export default function FireTracker({
       : selectedSnapshot
         ? `the trailing 12 months ending ${selectedMonthLabel}`
         : "the trailing 12-month range";
+  const ttmWindowEndOrdinal = selectedSnapshot
+    ? selectedSnapshot.year * 12 + selectedSnapshot.monthIndex
+    : null;
+  const ttmWindowStartOrdinal =
+    ttmWindowEndOrdinal != null ? ttmWindowEndOrdinal - 11 : null;
+  const isAnnualBonusMonthStale =
+    fireSettings.annualBonusAmount > 0 &&
+    isBonusMonthOutsideTtmWindow(
+      fireSettings.annualBonusMonthAdded,
+      ttmWindowStartOrdinal,
+      ttmWindowEndOrdinal,
+    );
+  const isNonRecurringBonusMonthStale =
+    fireSettings.nonRecurringBonusAmount > 0 &&
+    isBonusMonthOutsideTtmWindow(
+      fireSettings.nonRecurringBonusMonthAdded,
+      ttmWindowStartOrdinal,
+      ttmWindowEndOrdinal,
+    );
+  const isDraftAnnualBonusMonthStale =
+    draftTimeToFireSettings.annualBonusAmount > 0 &&
+    isBonusMonthOutsideTtmWindow(
+      draftTimeToFireSettings.annualBonusMonthAdded,
+      ttmWindowStartOrdinal,
+      ttmWindowEndOrdinal,
+    );
+  const isDraftNonRecurringBonusMonthStale =
+    draftTimeToFireSettings.nonRecurringBonusAmount > 0 &&
+    isBonusMonthOutsideTtmWindow(
+      draftTimeToFireSettings.nonRecurringBonusMonthAdded,
+      ttmWindowStartOrdinal,
+      ttmWindowEndOrdinal,
+    );
   const targetAgeSummary =
     projection?.targetYearsAway == null
       ? "Add your date of birth and target FIRE age in settings."
@@ -376,6 +458,64 @@ export default function FireTracker({
   const latestConfiguredBalancePeriod = getLatestRetirementBalancePeriod(
     configuredRetirementSystem,
   );
+  const currentMonthOrdinal =
+    new Date().getFullYear() * 12 + new Date().getMonth();
+  type StaleItem = { id: string; label: string; description: string };
+  const staleItems: StaleItem[] = [];
+  if (isAnnualBonusMonthStale) {
+    staleItems.push({
+      id: "annual-bonus",
+      label: "Recurring annual bonus month",
+      description:
+        "The bonus month falls outside the current TTM window. Open Time to FIRE Settings to update.",
+    });
+  }
+  if (isNonRecurringBonusMonthStale) {
+    staleItems.push({
+      id: "non-recurring",
+      label: "Non-recurring one-off amount month",
+      description:
+        "The one-off amount's month falls outside the current TTM window. Open Time to FIRE Settings to update.",
+    });
+  }
+  if (configuredRetirementSystem != null) {
+    const retirementBalanceOrdinal =
+      latestConfiguredBalancePeriod != null
+        ? latestConfiguredBalancePeriod.year * 12 +
+          latestConfiguredBalancePeriod.monthIndex
+        : null;
+    const isRetirementBalanceStale =
+      retirementBalanceOrdinal == null ||
+      currentMonthOrdinal - retirementBalanceOrdinal > 1;
+    if (isRetirementBalanceStale) {
+      staleItems.push({
+        id: "retirement-balance",
+        label: `${configuredRetirementSystem.name} balance`,
+        description:
+          latestConfiguredBalancePeriod == null
+            ? "No monthly balance history has been entered yet. Open the Retirement Module to add balances."
+            : `Last updated ${formatMonthPeriod(
+                latestConfiguredBalancePeriod.year,
+                latestConfiguredBalancePeriod.monthIndex,
+              )}. Open the Retirement Module to update.`,
+      });
+    }
+  }
+  if (orderedSnapshots.length > 0) {
+    const latestSnapshotOrdinal =
+      orderedSnapshots[0].year * 12 + orderedSnapshots[0].monthIndex;
+    if (currentMonthOrdinal - latestSnapshotOrdinal > 1) {
+      staleItems.push({
+        id: "net-worth",
+        label: "Monthly net worth data",
+        description: `Last recorded ${formatMonthPeriod(
+          orderedSnapshots[0].year,
+          orderedSnapshots[0].monthIndex,
+        )}. Add a new monthly entry in the net worth table.`,
+      });
+    }
+  }
+  const staleCount = staleItems.length;
   const configuredMemberCount = new Set(
     (configuredRetirementSystem?.members ?? [])
       .map((member) => member.id)
@@ -527,6 +667,8 @@ export default function FireTracker({
       timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
       annualBonusAmount: fireSettings.annualBonusAmount,
       nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+      annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
+      nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
     });
     setShowTimeToFireSettingsModal(true);
   };
@@ -539,6 +681,9 @@ export default function FireTracker({
         annualBonusAmount: draftTimeToFireSettings.annualBonusAmount,
         nonRecurringBonusAmount:
           draftTimeToFireSettings.nonRecurringBonusAmount,
+        annualBonusMonthAdded: draftTimeToFireSettings.annualBonusMonthAdded,
+        nonRecurringBonusMonthAdded:
+          draftTimeToFireSettings.nonRecurringBonusMonthAdded,
       }),
     );
     setShowTimeToFireSettingsModal(false);
@@ -562,29 +707,93 @@ export default function FireTracker({
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
-              <button
-                type="button"
-                onClick={() => setActiveView("display")}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  activeView === "display"
-                    ? "bg-white text-orange-700 shadow-sm"
-                    : "text-gray-500 hover:text-orange-700"
-                }`}
-              >
-                Projection
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveView("settings")}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  activeView === "settings"
-                    ? "bg-white text-orange-700 shadow-sm"
-                    : "text-gray-500 hover:text-orange-700"
-                }`}
-              >
-                <Settings />
-              </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveView("display")}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    activeView === "display"
+                      ? "bg-white text-orange-700 shadow-sm"
+                      : "text-gray-500 hover:text-orange-700"
+                  }`}
+                >
+                  Projection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveView("settings")}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    activeView === "settings"
+                      ? "bg-white text-orange-700 shadow-sm"
+                      : "text-gray-500 hover:text-orange-700"
+                  }`}
+                >
+                  <Settings />
+                </button>
+              </div>
+              <div className="relative" ref={stalePopoverRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowStalePopover((prev) => !prev)}
+                  className={`relative rounded-lg p-2 transition-colors ${
+                    staleCount > 0
+                      ? "text-amber-600 hover:bg-amber-50"
+                      : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  }`}
+                  aria-label={`${
+                    staleCount > 0
+                      ? `${staleCount} stale data item${
+                          staleCount !== 1 ? "s" : ""
+                        } need updating`
+                      : "All data is up to date"
+                  }`}
+                >
+                  <Bell size={18} />
+                  {staleCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[10px] font-bold leading-none text-white">
+                      {staleCount}
+                    </span>
+                  )}
+                </button>
+                {showStalePopover && (
+                  <div className="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-lg">
+                    <div className="border-b border-amber-100 bg-amber-50 px-4 py-3">
+                      <p className="text-sm font-semibold text-amber-800">
+                        {staleCount > 0
+                          ? `${staleCount} value${
+                              staleCount !== 1 ? "s" : ""
+                            } may need updating`
+                          : "All values are up to date"}
+                      </p>
+                    </div>
+                    {staleItems.length === 0 ? (
+                      <div className="px-4 py-4 text-sm text-gray-500">
+                        No stale data detected.
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {staleItems.map((item) => (
+                          <li key={item.id} className="flex gap-3 px-4 py-3">
+                            <AlertTriangle
+                              size={15}
+                              className="mt-0.5 shrink-0 text-amber-500"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {item.label}
+                              </p>
+                              <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+                                {item.description}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -837,6 +1046,17 @@ export default function FireTracker({
                             )}
                         .
                       </p>
+                      {isAnnualBonusMonthStale || isNonRecurringBonusMonthStale ? (
+                        <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+                          <AlertTriangle size={13} className="shrink-0" />
+                          {isAnnualBonusMonthStale && isNonRecurringBonusMonthStale
+                            ? "Both bonus months fall outside the current TTM window."
+                            : isAnnualBonusMonthStale
+                              ? "The recurring bonus month falls outside the current TTM window."
+                              : "The non-recurring bonus month falls outside the current TTM window."}{" "}
+                          Open Time to FIRE Settings to update.
+                        </p>
+                      ) : null}
                       <button
                         type="button"
                         onClick={handleOpenTimeToFireSettings}
@@ -1578,7 +1798,7 @@ export default function FireTracker({
                 </button>
               </div>
 
-              <label className="block rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
                 <span className="text-xs uppercase tracking-wide text-gray-400">
                   <b>Recurring</b> annual bonus or large amount
                 </span>
@@ -1600,9 +1820,32 @@ export default function FireTracker({
                   }
                   className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
-              </label>
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-500">
+                    Month received
+                  </label>
+                  <input
+                    type="month"
+                    value={draftTimeToFireSettings.annualBonusMonthAdded ?? ""}
+                    onChange={(event) =>
+                      setDraftTimeToFireSettings((prev) => ({
+                        ...prev,
+                        annualBonusMonthAdded: event.target.value || null,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                  />
+                  {isDraftAnnualBonusMonthStale ? (
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+                      <AlertTriangle size={13} className="shrink-0" />
+                      This month is outside the current TTM window (
+                      {ttmRangeLabel}). Update or clear this setting.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
 
-              <label className="block rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
                 <span className="text-xs uppercase tracking-wide text-gray-400">
                   <b>Non-recurring</b> bonus or large amount
                 </span>
@@ -1624,7 +1867,33 @@ export default function FireTracker({
                   }
                   className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 />
-              </label>
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-500">
+                    Month received
+                  </label>
+                  <input
+                    type="month"
+                    value={
+                      draftTimeToFireSettings.nonRecurringBonusMonthAdded ?? ""
+                    }
+                    onChange={(event) =>
+                      setDraftTimeToFireSettings((prev) => ({
+                        ...prev,
+                        nonRecurringBonusMonthAdded:
+                          event.target.value || null,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                  />
+                  {isDraftNonRecurringBonusMonthStale ? (
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+                      <AlertTriangle size={13} className="shrink-0" />
+                      This month is outside the current TTM window (
+                      {ttmRangeLabel}). Update or clear this setting.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
 
               <div className="flex items-center justify-end gap-3">
                 <button

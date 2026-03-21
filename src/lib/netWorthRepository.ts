@@ -12,6 +12,8 @@ export interface FireSettings {
   timeToFireAlgorithm: FireTimeToFireAlgorithm;
   annualBonusAmount: number;
   nonRecurringBonusAmount: number;
+  annualBonusMonthAdded: string | null;
+  nonRecurringBonusMonthAdded: string | null;
   dateOfBirth: string | null;
   targetFireAge: number | null;
   predictedDeathAge: number | null;
@@ -27,6 +29,8 @@ export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   timeToFireAlgorithm: "ttm",
   annualBonusAmount: 0,
   nonRecurringBonusAmount: 0,
+  annualBonusMonthAdded: null,
+  nonRecurringBonusMonthAdded: null,
   dateOfBirth: null,
   targetFireAge: null,
   predictedDeathAge: null,
@@ -73,6 +77,8 @@ interface FireSettingsRow {
   time_to_fire_algorithm?: string | null;
   annual_bonus_amount?: number | null;
   non_recurring_bonus_amount?: number | null;
+  annual_bonus_month_added?: string | null;
+  non_recurring_bonus_month_added?: string | null;
   monthly_contribution: number;
   monthly_income?: number | null;
   retirement_system?: RetirementSystemConfig | null;
@@ -113,6 +119,12 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     timeToFireAlgorithm,
     annualBonusAmount: row.annual_bonus_amount ?? 0,
     nonRecurringBonusAmount: row.non_recurring_bonus_amount ?? 0,
+    annualBonusMonthAdded: row.annual_bonus_month_added
+      ? row.annual_bonus_month_added.slice(0, 7)
+      : null,
+    nonRecurringBonusMonthAdded: row.non_recurring_bonus_month_added
+      ? row.non_recurring_bonus_month_added.slice(0, 7)
+      : null,
     dateOfBirth:
       row.date_of_birth ?? inferDateOfBirthFromCurrentAge(row.current_age),
     targetFireAge: row.target_fire_age,
@@ -137,6 +149,12 @@ function mapFireSettingsToRow(
     time_to_fire_algorithm: settings.timeToFireAlgorithm,
     annual_bonus_amount: settings.annualBonusAmount,
     non_recurring_bonus_amount: settings.nonRecurringBonusAmount,
+    annual_bonus_month_added: settings.annualBonusMonthAdded
+      ? `${settings.annualBonusMonthAdded}-01`
+      : null,
+    non_recurring_bonus_month_added: settings.nonRecurringBonusMonthAdded
+      ? `${settings.nonRecurringBonusMonthAdded}-01`
+      : null,
     monthly_contribution: 0,
     monthly_income: 0,
     retirement_system: settings.retirementSystem,
@@ -219,7 +237,7 @@ export async function loadNetWorthState(userId: string): Promise<{
     supabase
       .from("fire_settings")
       .select(
-        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
+        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, non_recurring_bonus_amount, annual_bonus_month_added, non_recurring_bonus_month_added, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
       )
       .eq("user_id", userId),
   ]);

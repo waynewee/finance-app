@@ -220,6 +220,8 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
     timeToFireAlgorithm: settings.timeToFireAlgorithm === "ttm" ? "ttm" : "ttm",
     annualBonusAmount: Math.max(0, settings.annualBonusAmount),
     nonRecurringBonusAmount: Math.max(0, settings.nonRecurringBonusAmount),
+    annualBonusMonthAdded: settings.annualBonusMonthAdded ?? null,
+    nonRecurringBonusMonthAdded: settings.nonRecurringBonusMonthAdded ?? null,
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
       ? settings.dateOfBirth
       : null,
