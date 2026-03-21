@@ -2,11 +2,15 @@ import { DEFAULT_CATEGORIES, type Category } from "../data/defaultCategories";
 import type { RetirementSystemConfig } from "./retirementSystem";
 import { supabase } from "./supabase";
 
+export type FireTimeToFireAlgorithm = "ttm";
+
 export interface FireSettings {
   annualSpendingGoal: number;
   preFireAnnualSpending: number;
   withdrawalRate: number;
   expectedAnnualReturn: number;
+  timeToFireAlgorithm: FireTimeToFireAlgorithm;
+  annualBonusAmount: number;
   dateOfBirth: string | null;
   targetFireAge: number | null;
   predictedDeathAge: number | null;
@@ -19,6 +23,8 @@ export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   preFireAnnualSpending: 0,
   withdrawalRate: 4,
   expectedAnnualReturn: 7,
+  timeToFireAlgorithm: "ttm",
+  annualBonusAmount: 0,
   dateOfBirth: null,
   targetFireAge: null,
   predictedDeathAge: null,
@@ -62,6 +68,8 @@ interface FireSettingsRow {
   pre_fire_annual_spending?: number | null;
   withdrawal_rate: number;
   expected_annual_return: number;
+  time_to_fire_algorithm?: string | null;
+  annual_bonus_amount?: number | null;
   monthly_contribution: number;
   monthly_income?: number | null;
   retirement_system?: RetirementSystemConfig | null;
@@ -91,11 +99,16 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     return DEFAULT_FIRE_SETTINGS;
   }
 
+  const timeToFireAlgorithm =
+    row.time_to_fire_algorithm === "ttm" ? "ttm" : "ttm";
+
   return {
     annualSpendingGoal: row.annual_spending_goal,
     preFireAnnualSpending: row.pre_fire_annual_spending ?? 0,
     withdrawalRate: row.withdrawal_rate,
     expectedAnnualReturn: row.expected_annual_return,
+    timeToFireAlgorithm,
+    annualBonusAmount: row.annual_bonus_amount ?? 0,
     dateOfBirth:
       row.date_of_birth ?? inferDateOfBirthFromCurrentAge(row.current_age),
     targetFireAge: row.target_fire_age,
@@ -117,6 +130,8 @@ function mapFireSettingsToRow(
     pre_fire_annual_spending: settings.preFireAnnualSpending,
     withdrawal_rate: settings.withdrawalRate,
     expected_annual_return: settings.expectedAnnualReturn,
+    time_to_fire_algorithm: settings.timeToFireAlgorithm,
+    annual_bonus_amount: settings.annualBonusAmount,
     monthly_contribution: 0,
     monthly_income: 0,
     retirement_system: settings.retirementSystem,
@@ -199,7 +214,7 @@ export async function loadNetWorthState(userId: string): Promise<{
     supabase
       .from("fire_settings")
       .select(
-        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
+        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
       )
       .eq("user_id", userId),
   ]);

@@ -21,12 +21,19 @@ export interface FireProjection {
   requiredMonthlyContribution: number | null;
   accessibleNetWorth: number;
   grossNetWorth: number;
+  inferredMonthlyContribution: number | null;
+  bonusMonthlyContribution: number;
   currentMonthlyContribution: number | null;
   observedMonthlyNetWorthChange: number | null;
   retirementProjection: RetirementProjectionResult | null;
 }
 
 const MAX_PROJECTION_MONTHS = 100 * 12;
+const TRAILING_TWELVE_MONTH_COUNT = 12;
+
+export function getFireCalculationLookbackMonths(): number {
+  return TRAILING_TWELVE_MONTH_COUNT;
+}
 
 function toMonthlyReturnRate(expectedAnnualReturn: number): number {
   const normalizedAnnualReturn = expectedAnnualReturn / 100;
@@ -190,6 +197,8 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
     preFireAnnualSpending: Math.max(0, settings.preFireAnnualSpending),
     withdrawalRate: Math.max(0.1, settings.withdrawalRate),
     expectedAnnualReturn: settings.expectedAnnualReturn,
+    timeToFireAlgorithm: settings.timeToFireAlgorithm === "ttm" ? "ttm" : "ttm",
+    annualBonusAmount: Math.max(0, settings.annualBonusAmount),
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
       ? settings.dateOfBirth
       : null,
@@ -242,11 +251,16 @@ export function calculateFireProjection(
     getProjectionReferenceDate(snapshots?.currentSnapshot),
   );
   const retirementSystem = normalizedSettings.retirementSystem;
-  const currentMonthlyContribution = inferMonthlyLiquidContribution(
+  const inferredMonthlyContribution = inferMonthlyLiquidContribution(
     normalizedSettings,
     snapshots?.currentSnapshot ?? null,
     snapshots?.previousSnapshots ?? [],
   );
+  const bonusMonthlyContribution = normalizedSettings.annualBonusAmount / 12;
+  const currentMonthlyContribution =
+    inferredMonthlyContribution == null
+      ? null
+      : inferredMonthlyContribution + bonusMonthlyContribution;
   const preFireMonthlySpending = normalizedSettings.preFireAnnualSpending / 12;
   const preFireMonthlyLiquidInflow =
     (currentMonthlyContribution ?? 0) + preFireMonthlySpending;
@@ -313,6 +327,8 @@ export function calculateFireProjection(
     requiredMonthlyContribution,
     accessibleNetWorth,
     grossNetWorth,
+    inferredMonthlyContribution,
+    bonusMonthlyContribution,
     currentMonthlyContribution,
     observedMonthlyNetWorthChange,
     retirementProjection,

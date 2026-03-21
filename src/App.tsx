@@ -26,13 +26,10 @@ import FireTracker from "./components/FireTracker";
 import RetirementConfigModal from "./components/RetirementConfigModal";
 import ShareAccountModal from "./components/ShareAccountModal";
 import {
-  getStoredFireSavingsAveragePreference,
   getStoredFireSnapshotPreference,
   getStoredSummarySnapshotPreference,
-  setStoredFireSavingsAveragePreference,
   setStoredFireSnapshotPreference,
   setStoredSummarySnapshotPreference,
-  type FireSavingsAveragePreference,
   type FireSnapshotPreference,
 } from "./lib/firePreferences";
 import { buildYearCsv, parseYearCsv } from "./lib/netWorthCsv";
@@ -54,8 +51,6 @@ function App() {
     useState<FireSnapshotPreference>("current");
   const [fireSnapshotPreference, setFireSnapshotPreference] =
     useState<FireSnapshotPreference>("current");
-  const [fireSavingsAveragePreference, setFireSavingsAveragePreference] =
-    useState<FireSavingsAveragePreference>(3);
   const [email, setEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -110,9 +105,6 @@ function App() {
   useEffect(() => {
     setSummarySnapshotPreference(getStoredSummarySnapshotPreference(user?.id));
     setFireSnapshotPreference(getStoredFireSnapshotPreference(user?.id));
-    setFireSavingsAveragePreference(
-      getStoredFireSavingsAveragePreference(user?.id),
-    );
   }, [user?.id]);
 
   const updateSummarySnapshotPreference = (
@@ -125,13 +117,6 @@ function App() {
   const updateFireSnapshotPreference = (preference: FireSnapshotPreference) => {
     setFireSnapshotPreference(preference);
     setStoredFireSnapshotPreference(user?.id, preference);
-  };
-
-  const updateFireSavingsAveragePreference = (
-    preference: FireSavingsAveragePreference,
-  ) => {
-    setFireSavingsAveragePreference(preference);
-    setStoredFireSavingsAveragePreference(user?.id, preference);
   };
 
   const downloadCsvFile = (fileName: string, content: string) => {
@@ -602,12 +587,8 @@ function App() {
                         selectedSnapshot={fireSnapshot}
                         previousSnapshot={previousSnapshot}
                         snapshotPreference={fireSnapshotPreference}
-                        savingsAveragePreference={fireSavingsAveragePreference}
                         onSnapshotPreferenceChange={
                           updateFireSnapshotPreference
-                        }
-                        onSavingsAveragePreferenceChange={
-                          updateFireSavingsAveragePreference
                         }
                         onUpdateFireSettings={updateFireSettings}
                         onOpenRetirementConfig={() =>

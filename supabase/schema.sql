@@ -354,6 +354,8 @@ create table if not exists public.fire_settings (
   pre_fire_annual_spending numeric(16, 2) not null default 0,
   withdrawal_rate numeric(7, 4) not null default 4,
   expected_annual_return numeric(7, 4) not null default 7,
+  time_to_fire_algorithm text not null default 'ttm',
+  annual_bonus_amount numeric(16, 2) not null default 0,
   monthly_contribution numeric(16, 2) not null default 2000,
   monthly_income numeric(16, 2) not null default 0,
   retirement_system jsonb,
@@ -380,6 +382,12 @@ add column if not exists contribution_stop_age integer;
 
 alter table public.fire_settings
 add column if not exists predicted_death_age integer;
+
+alter table public.fire_settings
+add column if not exists time_to_fire_algorithm text not null default 'ttm';
+
+alter table public.fire_settings
+add column if not exists annual_bonus_amount numeric(16, 2) not null default 0;
 
 do $$
 begin
