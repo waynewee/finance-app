@@ -127,6 +127,19 @@ function formatYears(value: number | null): string {
   return `${value.toFixed(1)} years`;
 }
 
+function formatDelayFromMonths(value: number | null): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) {
+    return "no delay";
+  }
+
+  if (value < 12) {
+    const roundedMonths = Math.round(value);
+    return `${roundedMonths} ${roundedMonths === 1 ? "month" : "months"}`;
+  }
+
+  return `${(value / 12).toFixed(1)} years`;
+}
+
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
@@ -283,6 +296,7 @@ export default function FireTracker({
       | "timeToFireAlgorithm"
       | "annualBonusAmount"
       | "nonRecurringBonusAmount"
+      | "jobLossMonthlySavingsReduction"
       | "annualBonusMonthAdded"
       | "nonRecurringBonusMonthAdded"
     >
@@ -290,6 +304,7 @@ export default function FireTracker({
     timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
     annualBonusAmount: fireSettings.annualBonusAmount,
     nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+    jobLossMonthlySavingsReduction: fireSettings.jobLossMonthlySavingsReduction,
     annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
     nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
   });
@@ -314,6 +329,8 @@ export default function FireTracker({
       timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
       annualBonusAmount: fireSettings.annualBonusAmount,
       nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+      jobLossMonthlySavingsReduction:
+        fireSettings.jobLossMonthlySavingsReduction,
       annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
       nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
     });
@@ -454,6 +471,23 @@ export default function FireTracker({
         ? `Not by age ${projectionDeadlineAge}`
         : formatYears(projection.yearsToFire)
       : "- years";
+  const jobLossSummary =
+    fireSettings.jobLossMonthlySavingsReduction <= 0
+      ? null
+      : projection?.jobLossMonthlyContribution == null
+        ? "Add enough trailing net worth history before using the job-loss delay estimate."
+        : projection.jobLossExceedsProjectionHorizon
+          ? `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)}, ongoing savings fall to ${formatCurrency(projection.jobLossMonthlyContribution)} per month and your target FIRE timing is delayed by ${projection.jobLossDelayIsLowerBound ? `at least ${formatDelayFromMonths(projection.jobLossDelayMonths)}` : formatDelayFromMonths(projection.jobLossDelayMonths)}, pushing it beyond the current projection horizon.`
+          : projection.jobLossMonthsToFire == null
+            ? `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)}, this plan does not reach FIRE within the current projection horizon.`
+            : `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)}, ongoing savings fall to ${formatCurrency(projection.jobLossMonthlyContribution)} per month and your target FIRE timing is delayed by ${formatDelayFromMonths(projection.jobLossDelayMonths)} to ${formatYears(projection.jobLossYearsToFire)}.`;
+  const showJobLossCard = fireSettings.jobLossMonthlySavingsReduction > 0;
+  const jobLossCardValue =
+    projection?.jobLossMonthlyContribution == null
+      ? "Need history"
+      : projection.jobLossDelayIsLowerBound
+        ? `>= ${formatDelayFromMonths(projection.jobLossDelayMonths)}`
+        : formatDelayFromMonths(projection.jobLossDelayMonths);
   const configuredRetirementSystem = fireSettings.retirementSystem;
   const latestConfiguredBalancePeriod = getLatestRetirementBalancePeriod(
     configuredRetirementSystem,
@@ -574,6 +608,20 @@ export default function FireTracker({
       accent: "from-orange-400/20 to-amber-500/10 text-orange-700",
       hasSettingsButton: true,
     },
+    ...(showJobLossCard
+      ? [
+          {
+            label: "Job-Loss FIRE Delay",
+            value: maskDisplayValue(jobLossCardValue, hideValues),
+            helper: displayInlineText(
+              jobLossSummary ??
+                "Add enough trailing net worth history before using the job-loss delay estimate.",
+            ),
+            icon: AlertTriangle,
+            accent: "from-amber-500/20 to-orange-500/10 text-amber-700",
+          },
+        ]
+      : []),
     {
       label: `Monthly Savings to retire by ${fireSettings.targetFireAge}`,
       value:
@@ -667,6 +715,8 @@ export default function FireTracker({
       timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
       annualBonusAmount: fireSettings.annualBonusAmount,
       nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+      jobLossMonthlySavingsReduction:
+        fireSettings.jobLossMonthlySavingsReduction,
       annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
       nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
     });
@@ -681,6 +731,8 @@ export default function FireTracker({
         annualBonusAmount: draftTimeToFireSettings.annualBonusAmount,
         nonRecurringBonusAmount:
           draftTimeToFireSettings.nonRecurringBonusAmount,
+        jobLossMonthlySavingsReduction:
+          draftTimeToFireSettings.jobLossMonthlySavingsReduction,
         annualBonusMonthAdded: draftTimeToFireSettings.annualBonusMonthAdded,
         nonRecurringBonusMonthAdded:
           draftTimeToFireSettings.nonRecurringBonusMonthAdded,
@@ -708,6 +760,16 @@ export default function FireTracker({
           </div>
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={handleOpenTimeToFireSettings}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+                >
+                  <Settings size={15} />
+                  Time to FIRE Settings
+                </button>
+              </div>
               <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
                 <button
                   type="button"
@@ -1044,12 +1106,20 @@ export default function FireTracker({
                           : formatCurrency(
                               fireSettings.nonRecurringBonusAmount,
                             )}
+                        , job-loss savings reduction{" "}
+                        {hideValues
+                          ? HIDDEN_VALUE
+                          : formatCurrency(
+                              fireSettings.jobLossMonthlySavingsReduction,
+                            )}
                         .
                       </p>
-                      {isAnnualBonusMonthStale || isNonRecurringBonusMonthStale ? (
+                      {isAnnualBonusMonthStale ||
+                      isNonRecurringBonusMonthStale ? (
                         <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
                           <AlertTriangle size={13} className="shrink-0" />
-                          {isAnnualBonusMonthStale && isNonRecurringBonusMonthStale
+                          {isAnnualBonusMonthStale &&
+                          isNonRecurringBonusMonthStale
                             ? "Both bonus months fall outside the current TTM window."
                             : isAnnualBonusMonthStale
                               ? "The recurring bonus month falls outside the current TTM window."
@@ -1146,7 +1216,9 @@ export default function FireTracker({
           </div>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              className={`grid gap-4 md:grid-cols-2 ${showJobLossCard ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}
+            >
               {cards.map((card) => {
                 const Icon = card.icon;
                 return (
@@ -1162,16 +1234,6 @@ export default function FireTracker({
                         <p className="mt-2 text-2xl font-semibold text-gray-900">
                           {card.value}
                         </p>
-                        {card.hasSettingsButton ? (
-                          <button
-                            type="button"
-                            onClick={handleOpenTimeToFireSettings}
-                            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
-                          >
-                            <Settings size={15} />
-                            Settings
-                          </button>
-                        ) : null}
                       </div>
                       <div
                         className={`rounded-2xl bg-gradient-to-br p-3 ${card.accent}`}
@@ -1879,8 +1941,7 @@ export default function FireTracker({
                     onChange={(event) =>
                       setDraftTimeToFireSettings((prev) => ({
                         ...prev,
-                        nonRecurringBonusMonthAdded:
-                          event.target.value || null,
+                        nonRecurringBonusMonthAdded: event.target.value || null,
                       }))
                     }
                     className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
@@ -1893,6 +1954,36 @@ export default function FireTracker({
                     </p>
                   ) : null}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <span className="text-xs uppercase tracking-wide text-gray-400">
+                  <b>Job-loss</b> monthly savings reduction
+                </span>
+                <p className="mt-2 text-xs leading-5 text-gray-500">
+                  Reduces your current inferred TTM monthly savings by this
+                  amount to estimate how much losing your job would delay FIRE.
+                </p>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={draftTimeToFireSettings.jobLossMonthlySavingsReduction}
+                  onChange={(event) =>
+                    setDraftTimeToFireSettings((prev) => ({
+                      ...prev,
+                      jobLossMonthlySavingsReduction: parseNumber(
+                        event.target.value,
+                      ),
+                    }))
+                  }
+                  className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  This keeps the current TTM estimate as the baseline and
+                  subtracts this monthly reduction before recomputing Time to
+                  FIRE.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3">

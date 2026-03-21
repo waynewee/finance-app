@@ -12,6 +12,7 @@ export interface FireSettings {
   timeToFireAlgorithm: FireTimeToFireAlgorithm;
   annualBonusAmount: number;
   nonRecurringBonusAmount: number;
+  jobLossMonthlySavingsReduction: number;
   annualBonusMonthAdded: string | null;
   nonRecurringBonusMonthAdded: string | null;
   dateOfBirth: string | null;
@@ -29,6 +30,7 @@ export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   timeToFireAlgorithm: "ttm",
   annualBonusAmount: 0,
   nonRecurringBonusAmount: 0,
+  jobLossMonthlySavingsReduction: 0,
   annualBonusMonthAdded: null,
   nonRecurringBonusMonthAdded: null,
   dateOfBirth: null,
@@ -42,6 +44,12 @@ export type MonthlyData = Record<
   string,
   Record<number, Record<string, number>>
 >;
+
+export interface NetWorthState {
+  categories: Category[];
+  monthlyData: MonthlyData;
+  fireSettings: FireSettings;
+}
 
 interface CategoryRow {
   user_id: string;
@@ -77,6 +85,7 @@ interface FireSettingsRow {
   time_to_fire_algorithm?: string | null;
   annual_bonus_amount?: number | null;
   non_recurring_bonus_amount?: number | null;
+  job_loss_monthly_savings_reduction?: number | null;
   annual_bonus_month_added?: string | null;
   non_recurring_bonus_month_added?: string | null;
   monthly_contribution: number;
@@ -91,6 +100,16 @@ interface FireSettingsRow {
 }
 
 const FIRE_SETTINGS_ROW_ID = "primary";
+const NET_WORTH_STATE_CACHE_PREFIX = "finance_app_net_worth_state";
+const NET_WORTH_STATE_CACHE_VERSION = 1;
+
+interface CachedNetWorthState {
+  version: number;
+  savedAt: string;
+  state: NetWorthState;
+}
+
+const inMemoryNetWorthStateCache = new Map<string, CachedNetWorthState>();
 
 function inferDateOfBirthFromCurrentAge(
   currentAge: number | null | undefined,
@@ -119,6 +138,7 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     timeToFireAlgorithm,
     annualBonusAmount: row.annual_bonus_amount ?? 0,
     nonRecurringBonusAmount: row.non_recurring_bonus_amount ?? 0,
+    jobLossMonthlySavingsReduction: row.job_loss_monthly_savings_reduction ?? 0,
     annualBonusMonthAdded: row.annual_bonus_month_added
       ? row.annual_bonus_month_added.slice(0, 7)
       : null,
@@ -149,6 +169,7 @@ function mapFireSettingsToRow(
     time_to_fire_algorithm: settings.timeToFireAlgorithm,
     annual_bonus_amount: settings.annualBonusAmount,
     non_recurring_bonus_amount: settings.nonRecurringBonusAmount,
+    job_loss_monthly_savings_reduction: settings.jobLossMonthlySavingsReduction,
     annual_bonus_month_added: settings.annualBonusMonthAdded
       ? `${settings.annualBonusMonthAdded}-01`
       : null,
@@ -237,7 +258,7 @@ export async function loadNetWorthState(userId: string): Promise<{
     supabase
       .from("fire_settings")
       .select(
-        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, non_recurring_bonus_amount, annual_bonus_month_added, non_recurring_bonus_month_added, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
+        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, non_recurring_bonus_amount, job_loss_monthly_savings_reduction, annual_bonus_month_added, non_recurring_bonus_month_added, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
       )
       .eq("user_id", userId),
   ]);
@@ -253,6 +274,59 @@ export async function loadNetWorthState(userId: string): Promise<{
     monthlyData: buildMonthlyData(monthlyRows ?? []),
     fireSettings: mapFireSettingsRow(fireSettingsRows?.[0]),
   };
+}
+
+export function getCachedNetWorthState(userId: string): NetWorthState | null {
+  const inMemoryValue = inMemoryNetWorthStateCache.get(userId);
+  if (inMemoryValue?.version === NET_WORTH_STATE_CACHE_VERSION) {
+    return inMemoryValue.state;
+  }
+
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(
+    buildNetWorthStateCacheKey(userId),
+  );
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as CachedNetWorthState;
+    if (parsed.version !== NET_WORTH_STATE_CACHE_VERSION || !parsed.state) {
+      return null;
+    }
+
+    inMemoryNetWorthStateCache.set(userId, parsed);
+    return parsed.state;
+  } catch {
+    return null;
+  }
+}
+
+export function cacheNetWorthState(userId: string, state: NetWorthState): void {
+  const cachedState: CachedNetWorthState = {
+    version: NET_WORTH_STATE_CACHE_VERSION,
+    savedAt: new Date().toISOString(),
+    state,
+  };
+
+  inMemoryNetWorthStateCache.set(userId, cachedState);
+
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    buildNetWorthStateCacheKey(userId),
+    JSON.stringify(cachedState),
+  );
+}
+
+function buildNetWorthStateCacheKey(userId: string): string {
+  return `${NET_WORTH_STATE_CACHE_PREFIX}:${userId}`;
 }
 
 export async function saveMonthlyValue(

@@ -215,36 +215,10 @@ export function useAccountAccess(user: User | null) {
   }, [refreshAccounts, userId]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const hydrateSharing = async () => {
-      if (!userId || activeAccountId !== userId) {
-        setSharing({ collaborators: [], invitations: [], isLoading: false });
-        return;
-      }
-
-      try {
-        await refreshSharing();
-      } catch (loadError) {
-        if (!isMounted) {
-          return;
-        }
-
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Failed to load account collaborators.",
-        );
-        setSharing({ collaborators: [], invitations: [], isLoading: false });
-      }
-    };
-
-    void hydrateSharing();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeAccountId, refreshSharing, userId]);
+    if (!userId || activeAccountId !== userId) {
+      setSharing({ collaborators: [], invitations: [], isLoading: false });
+    }
+  }, [activeAccountId, userId]);
 
   const selectAccount = useCallback((accountUserId: string) => {
     setActiveAccountId(accountUserId);
@@ -334,6 +308,7 @@ export function useAccountAccess(user: User | null) {
     isLoading,
     error,
     setActiveAccountId: selectAccount,
+    loadSharing: refreshSharing,
     renameActiveAccount: renameOwnAccount,
     inviteCollaborator,
     removeCollaborator,

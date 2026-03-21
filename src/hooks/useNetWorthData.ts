@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Category } from "../data/defaultCategories";
 import {
+  cacheNetWorthState,
   DEFAULT_FIRE_SETTINGS,
+  getCachedNetWorthState,
   loadNetWorthState,
   replaceYearMonthlyValues,
   replaceCategories,
@@ -66,6 +68,49 @@ export function useNetWorthData(accountUserId: string | null) {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const categoriesRef = useRef(categories);
+  const monthlyDataRef = useRef(monthlyData);
+  const fireSettingsRef = useRef(fireSettings);
+
+  useEffect(() => {
+    categoriesRef.current = categories;
+  }, [categories]);
+
+  useEffect(() => {
+    monthlyDataRef.current = monthlyData;
+  }, [monthlyData]);
+
+  useEffect(() => {
+    fireSettingsRef.current = fireSettings;
+  }, [fireSettings]);
+
+  const syncCachedState = useCallback(
+    (nextState: {
+      categories?: Category[];
+      monthlyData?: MonthlyData;
+      fireSettings?: FireSettings;
+    }) => {
+      if (!accountUserId) {
+        return;
+      }
+
+      const cachedCategories = nextState.categories ?? categoriesRef.current;
+      const cachedMonthlyData = nextState.monthlyData ?? monthlyDataRef.current;
+      const cachedFireSettings =
+        nextState.fireSettings ?? fireSettingsRef.current;
+
+      categoriesRef.current = cachedCategories;
+      monthlyDataRef.current = cachedMonthlyData;
+      fireSettingsRef.current = cachedFireSettings;
+
+      cacheNetWorthState(accountUserId, {
+        categories: cachedCategories,
+        monthlyData: cachedMonthlyData,
+        fireSettings: cachedFireSettings,
+      });
+    },
+    [accountUserId],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -76,14 +121,28 @@ export function useNetWorthData(accountUserId: string | null) {
       setFireSettings(DEFAULT_FIRE_SETTINGS);
       setError(null);
       setIsLoading(false);
+      categoriesRef.current = [];
+      monthlyDataRef.current = {};
+      fireSettingsRef.current = DEFAULT_FIRE_SETTINGS;
       return () => {
         isMounted = false;
       };
     }
 
-    const hydrate = async () => {
+    const cachedState = getCachedNetWorthState(accountUserId);
+    if (cachedState) {
+      setCategories(cachedState.categories);
+      setMonthlyData(cachedState.monthlyData);
+      setFireSettings(cachedState.fireSettings);
+      setIsLoading(false);
+      categoriesRef.current = cachedState.categories;
+      monthlyDataRef.current = cachedState.monthlyData;
+      fireSettingsRef.current = cachedState.fireSettings;
+    } else {
       setIsLoading(true);
+    }
 
+    const hydrate = async () => {
       try {
         const state = await loadNetWorthState(accountUserId);
         if (!isMounted) {
@@ -93,6 +152,7 @@ export function useNetWorthData(accountUserId: string | null) {
         setCategories(state.categories);
         setMonthlyData(state.monthlyData);
         setFireSettings(state.fireSettings);
+        syncCachedState(state);
         setError(null);
       } catch (loadError) {
         if (!isMounted) {
@@ -116,7 +176,7 @@ export function useNetWorthData(accountUserId: string | null) {
     return () => {
       isMounted = false;
     };
-  }, [accountUserId]);
+  }, [accountUserId, syncCachedState]);
 
   const getValue = useCallback(
     (year: number, monthIndex: number, subcategoryId: string): number => {
@@ -147,6 +207,7 @@ export function useNetWorthData(accountUserId: string | null) {
             },
           },
         };
+        syncCachedState({ monthlyData: next });
         return next;
       });
 
@@ -211,6 +272,7 @@ export function useNetWorthData(accountUserId: string | null) {
       }
 
       setCategories(updated);
+      syncCachedState({ categories: updated });
       void replaceCategories(accountUserId, updated).catch((saveError) => {
         setError(
           saveError instanceof Error
@@ -229,6 +291,7 @@ export function useNetWorthData(accountUserId: string | null) {
       }
 
       setFireSettings(updated);
+      syncCachedState({ fireSettings: updated });
       void saveFireSettings(accountUserId, updated).catch((saveError) => {
         setError(
           saveError instanceof Error
@@ -267,6 +330,12 @@ export function useNetWorthData(accountUserId: string | null) {
         ...prev,
         [year]: nextYearData,
       }));
+      syncCachedState({
+        monthlyData: {
+          ...monthlyDataRef.current,
+          [year]: nextYearData,
+        },
+      });
       setError(null);
 
       try {
@@ -280,6 +349,12 @@ export function useNetWorthData(accountUserId: string | null) {
           ...prev,
           [year]: previousYearData,
         }));
+        syncCachedState({
+          monthlyData: {
+            ...monthlyDataRef.current,
+            [year]: previousYearData,
+          },
+        });
         setError(
           saveError instanceof Error
             ? saveError.message

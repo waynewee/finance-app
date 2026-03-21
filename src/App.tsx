@@ -34,8 +34,8 @@ import {
 } from "./lib/firePreferences";
 import { buildYearCsv, parseYearCsv } from "./lib/netWorthCsv";
 
-type AppPage = "net-worth" | "investment-planner";
-type NetWorthDisplay = "summary" | "fire" | "chart";
+type AppPage = "net-worth" | "fire-tracker" | "investment-planner";
+type NetWorthDisplay = "summary" | "chart";
 
 function App() {
   const currentYear = new Date().getFullYear();
@@ -78,6 +78,7 @@ function App() {
     isLoading: isAccountLoading,
     error: accountError,
     setActiveAccountId,
+    loadSharing,
     renameActiveAccount,
     inviteCollaborator,
     removeCollaborator,
@@ -231,6 +232,7 @@ function App() {
     fireSnapshotPreference === "previous" && previousSnapshot
       ? previousSnapshot
       : latestSnapshot;
+  const showAccountWorkspace = activePage !== "investment-planner";
   const displayOptions: Array<{
     id: NetWorthDisplay;
     label: string;
@@ -240,11 +242,6 @@ function App() {
       id: "summary",
       label: "Summary",
       description: "Key month-to-month and cross-year trend changes",
-    },
-    {
-      id: "fire",
-      label: "FIRE",
-      description: "Financial independence progress and target tracking",
     },
     {
       id: "chart",
@@ -399,9 +396,12 @@ function App() {
               {hideValues ? "Show Values" : "Hide Values"}
             </button>
 
-            {activePage === "net-worth" ? (
+            {showAccountWorkspace ? (
               <button
-                onClick={() => setShowShareAccount(true)}
+                onClick={() => {
+                  setShowShareAccount(true);
+                  void loadSharing();
+                }}
                 className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
               >
                 <Users size={15} />
@@ -479,10 +479,32 @@ function App() {
                     >
                       <span className="flex items-center gap-2">
                         <TrendingUp size={16} />
-                        FIRE Net Worth
+                        Net Worth
                       </span>
                       {activePage === "net-worth" ? (
                         <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#1E7A18]">
+                          Active
+                        </span>
+                      ) : null}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowConfig(false);
+                        setActivePage("fire-tracker");
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
+                        activePage === "fire-tracker"
+                          ? "border-[#F4B183] bg-orange-50 text-orange-700 shadow-sm"
+                          : "border-gray-200 text-gray-600 hover:border-[#F4B183] hover:bg-orange-50 hover:text-orange-700"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Flame size={16} />
+                        FIRE Tracker
+                      </span>
+                      {activePage === "fire-tracker" ? (
+                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-orange-700">
                           Active
                         </span>
                       ) : null}
@@ -554,12 +576,8 @@ function App() {
                               onClick={() => setActiveDisplay(display.id)}
                               className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                                 activeDisplay === display.id
-                                  ? display.id === "fire"
-                                    ? "bg-white text-orange-700 shadow-sm"
-                                    : "bg-white text-[#1E7A18] shadow-sm"
-                                  : display.id === "fire"
-                                    ? "text-gray-500 hover:text-orange-700"
-                                    : "text-gray-500 hover:text-[#1E7A18]"
+                                  ? "bg-white text-[#1E7A18] shadow-sm"
+                                  : "text-gray-500 hover:text-[#1E7A18]"
                               }`}
                             >
                               {display.label}
@@ -579,24 +597,6 @@ function App() {
                       />
                     ) : null}
 
-                    {activeDisplay === "fire" ? (
-                      <FireTracker
-                        hideValues={hideValues}
-                        fireSettings={fireSettings}
-                        snapshots={netWorthSnapshots}
-                        selectedSnapshot={fireSnapshot}
-                        previousSnapshot={previousSnapshot}
-                        snapshotPreference={fireSnapshotPreference}
-                        onSnapshotPreferenceChange={
-                          updateFireSnapshotPreference
-                        }
-                        onUpdateFireSettings={updateFireSettings}
-                        onOpenRetirementConfig={() =>
-                          setShowRetirementConfig(true)
-                        }
-                      />
-                    ) : null}
-
                     {activeDisplay === "chart" ? (
                       <NetWorthChart
                         hideValues={hideValues}
@@ -607,86 +607,103 @@ function App() {
                       />
                     ) : null}
 
-                    <section>
-                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3">
-                          <h2 className="text-base font-semibold text-gray-700">
-                            Monthly Breakdown —
-                          </h2>
-                          <div className="flex items-center gap-1 rounded-xl bg-gray-100 px-1 py-1">
-                            <button
-                              onClick={() => setTableYear((year) => year - 1)}
-                              className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-white hover:text-[#1E7A18] hover:shadow-sm"
-                              aria-label="Previous year"
-                            >
-                              <ChevronLeft size={16} />
-                            </button>
-                            <span className="min-w-16 px-3 text-center text-sm font-semibold text-gray-700">
-                              {tableYear}
-                            </span>
-                            <button
-                              onClick={() => setTableYear((year) => year + 1)}
-                              className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-white hover:text-[#1E7A18] hover:shadow-sm"
-                              aria-label="Next year"
-                            >
-                              <ChevronRight size={16} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            onClick={handleExportCsv}
-                            className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
-                          >
-                            <Download size={15} />
-                            Export CSV
-                          </button>
-                          <button
-                            onClick={() => importInputRef.current?.click()}
-                            disabled={isImportingCsv}
-                            className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Upload size={15} />
-                            {isImportingCsv ? "Importing..." : "Import CSV"}
-                          </button>
-                          <button
-                            onClick={() => setShowConfig(true)}
-                            className="flex items-center gap-2 rounded-xl border border-green-200 px-4 py-2 text-sm text-green-700 transition-all hover:border-green-300 hover:bg-green-50"
-                          >
-                            <Settings size={15} />
-                            Categories
-                          </button>
-                          <input
-                            ref={importInputRef}
-                            type="file"
-                            accept=".csv,text/csv"
-                            className="hidden"
-                            onChange={(event) => void handleImportCsv(event)}
-                          />
-                        </div>
-                      </div>
-                      {csvNotice ? (
-                        <div className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
-                          {csvNotice}
-                        </div>
-                      ) : null}
-                      <NetWorthTable
-                        hideValues={hideValues}
-                        year={tableYear}
-                        categories={categories}
-                        getValue={getValue}
-                        setValue={setValue}
-                        getMonthTotal={getMonthTotal}
-                        getCategoryMonthTotal={getCategoryMonthTotal}
-                      />
-                    </section>
                   </>
+                ) : activePage === "fire-tracker" ? (
+                  <FireTracker
+                    hideValues={hideValues}
+                    fireSettings={fireSettings}
+                    snapshots={netWorthSnapshots}
+                    selectedSnapshot={fireSnapshot}
+                    previousSnapshot={previousSnapshot}
+                    snapshotPreference={fireSnapshotPreference}
+                    onSnapshotPreferenceChange={updateFireSnapshotPreference}
+                    onUpdateFireSettings={updateFireSettings}
+                    onOpenRetirementConfig={() =>
+                      setShowRetirementConfig(true)
+                    }
+                  />
                 ) : (
                   <InvestmentPlannerPage
                     accountUserId={activeAccountId ?? user.id}
                     hideValues={hideValues}
                   />
                 )}
+
+                {activePage === "net-worth" ? (
+                  <section>
+                    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-base font-semibold text-gray-700">
+                          Monthly Breakdown —
+                        </h2>
+                        <div className="flex items-center gap-1 rounded-xl bg-gray-100 px-1 py-1">
+                          <button
+                            onClick={() => setTableYear((year) => year - 1)}
+                            className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-white hover:text-[#1E7A18] hover:shadow-sm"
+                            aria-label="Previous year"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <span className="min-w-16 px-3 text-center text-sm font-semibold text-gray-700">
+                            {tableYear}
+                          </span>
+                          <button
+                            onClick={() => setTableYear((year) => year + 1)}
+                            className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-white hover:text-[#1E7A18] hover:shadow-sm"
+                            aria-label="Next year"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={handleExportCsv}
+                          className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
+                        >
+                          <Download size={15} />
+                          Export CSV
+                        </button>
+                        <button
+                          onClick={() => importInputRef.current?.click()}
+                          disabled={isImportingCsv}
+                          className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Upload size={15} />
+                          {isImportingCsv ? "Importing..." : "Import CSV"}
+                        </button>
+                        <button
+                          onClick={() => setShowConfig(true)}
+                          className="flex items-center gap-2 rounded-xl border border-green-200 px-4 py-2 text-sm text-green-700 transition-all hover:border-green-300 hover:bg-green-50"
+                        >
+                          <Settings size={15} />
+                          Categories
+                        </button>
+                        <input
+                          ref={importInputRef}
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          onChange={(event) => void handleImportCsv(event)}
+                        />
+                      </div>
+                    </div>
+                    {csvNotice ? (
+                      <div className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
+                        {csvNotice}
+                      </div>
+                    ) : null}
+                    <NetWorthTable
+                      hideValues={hideValues}
+                      year={tableYear}
+                      categories={categories}
+                      getValue={getValue}
+                      setValue={setValue}
+                      getMonthTotal={getMonthTotal}
+                      getCategoryMonthTotal={getCategoryMonthTotal}
+                    />
+                  </section>
+                ) : null}
               </>
             )}
           </div>
@@ -702,7 +719,7 @@ function App() {
         />
       )}
 
-      {showRetirementConfig && activePage === "net-worth" && (
+      {showRetirementConfig && activePage === "fire-tracker" && (
         <RetirementConfigModal
           settings={fireSettings}
           latestSnapshot={latestSnapshot}

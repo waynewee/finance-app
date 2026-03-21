@@ -24,6 +24,12 @@ export interface FireProjection {
   inferredMonthlyContribution: number | null;
   recurringMonthlyContribution: number | null;
   currentMonthlyContribution: number | null;
+  jobLossMonthlyContribution: number | null;
+  jobLossMonthsToFire: number | null;
+  jobLossYearsToFire: number | null;
+  jobLossDelayMonths: number | null;
+  jobLossExceedsProjectionHorizon: boolean;
+  jobLossDelayIsLowerBound: boolean;
   observedMonthlyNetWorthChange: number | null;
   retirementProjection: RetirementProjectionResult | null;
 }
@@ -77,6 +83,17 @@ function getRecurringMonthlyContribution(
 
 function getTtmOneOffMonthlyEquivalent(oneOffAmount: number): number {
   return oneOffAmount / TRAILING_TWELVE_MONTH_COUNT;
+}
+
+function getReducedMonthlyContribution(
+  monthlyContribution: number | null,
+  monthlySavingsReduction: number,
+): number | null {
+  if (monthlyContribution == null) {
+    return null;
+  }
+
+  return Math.max(monthlyContribution - monthlySavingsReduction, 0);
 }
 
 function isValidDateOfBirth(value: string | null): value is string {
@@ -220,6 +237,10 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
     timeToFireAlgorithm: settings.timeToFireAlgorithm === "ttm" ? "ttm" : "ttm",
     annualBonusAmount: Math.max(0, settings.annualBonusAmount),
     nonRecurringBonusAmount: Math.max(0, settings.nonRecurringBonusAmount),
+    jobLossMonthlySavingsReduction: Math.max(
+      0,
+      settings.jobLossMonthlySavingsReduction,
+    ),
     annualBonusMonthAdded: settings.annualBonusMonthAdded ?? null,
     nonRecurringBonusMonthAdded: settings.nonRecurringBonusMonthAdded ?? null,
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
@@ -244,6 +265,43 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
 
 export function getDefaultFireSettings(): FireSettings {
   return DEFAULT_FIRE_SETTINGS;
+}
+
+function calculateProjectedMonthsToFire(
+  currentNetWorth: number,
+  fireNumber: number,
+  monthlyContribution: number,
+  settings: FireSettings,
+  currentAge: number | null,
+  projectionMonthLimit: number,
+  spendingStartAge: number | null = settings.targetFireAge,
+): number | null {
+  if (settings.retirementSystem) {
+    return calculateRetirementProjection({
+      currentNetWorth,
+      currentAge,
+      contributionStopAge: settings.retirementContributionStopAge,
+      spendingStartAge,
+      liquidMonthlyContribution: monthlyContribution,
+      preFireMonthlyLiquidInflow:
+        monthlyContribution + settings.preFireAnnualSpending / 12,
+      liquidAnnualReturn: settings.expectedAnnualReturn,
+      fallbackAnnualWithdrawalRate: settings.withdrawalRate,
+      preFireAnnualSpending: settings.preFireAnnualSpending,
+      annualSpendingGoal: settings.annualSpendingGoal,
+      fireNumber,
+      projectionMonths: projectionMonthLimit,
+      system: settings.retirementSystem,
+    }).monthsToFire;
+  }
+
+  return calculateMonthsToFire(
+    currentNetWorth,
+    fireNumber,
+    monthlyContribution,
+    settings.expectedAnnualReturn,
+    projectionMonthLimit,
+  );
 }
 
 export function calculateFireProjection(
@@ -284,6 +342,15 @@ export function calculateFireProjection(
     normalizedSettings.annualBonusAmount,
   );
   const currentMonthlyContribution = inferredMonthlyContribution;
+  const hasJobLossScenario =
+    normalizedSettings.jobLossMonthlySavingsReduction > 0 &&
+    currentMonthlyContribution != null;
+  const jobLossMonthlyContribution = hasJobLossScenario
+    ? getReducedMonthlyContribution(
+        currentMonthlyContribution,
+        normalizedSettings.jobLossMonthlySavingsReduction,
+      )
+    : null;
   const preFireMonthlySpending = normalizedSettings.preFireAnnualSpending / 12;
   const preFireMonthlyLiquidInflow =
     (currentMonthlyContribution ?? 0) + preFireMonthlySpending;
@@ -326,6 +393,67 @@ export function calculateFireProjection(
     normalizedSettings.targetFireAge > currentAge
       ? normalizedSettings.targetFireAge - currentAge
       : null;
+  const targetMonthsAway =
+    targetYearsAway == null ? null : Math.round(targetYearsAway * 12);
+  const estimatedMonthsToFireForDelay =
+    currentMonthlyContribution == null
+      ? null
+      : calculateProjectedMonthsToFire(
+          currentNetWorth,
+          fireNumber,
+          currentMonthlyContribution,
+          normalizedSettings,
+          currentAge,
+          MAX_PROJECTION_MONTHS,
+          null,
+        );
+  const jobLossMonthsToFire =
+    jobLossMonthlyContribution == null
+      ? null
+      : calculateProjectedMonthsToFire(
+          currentNetWorth,
+          fireNumber,
+          jobLossMonthlyContribution,
+          normalizedSettings,
+          currentAge,
+          projectionMonthLimit,
+          null,
+        );
+  const estimatedJobLossMonthsToFireForDelay =
+    jobLossMonthlyContribution == null
+      ? null
+      : calculateProjectedMonthsToFire(
+          currentNetWorth,
+          fireNumber,
+          jobLossMonthlyContribution,
+          normalizedSettings,
+          currentAge,
+          MAX_PROJECTION_MONTHS,
+          null,
+        );
+  const lowerBoundDelayMonths =
+    jobLossMonthlyContribution != null &&
+    jobLossMonthsToFire == null &&
+    targetMonthsAway != null
+      ? Math.max(projectionMonthLimit - targetMonthsAway, 0)
+      : null;
+  const jobLossDelayMonths =
+    estimatedJobLossMonthsToFireForDelay == null
+      ? lowerBoundDelayMonths
+      : targetMonthsAway != null
+        ? Math.max(estimatedJobLossMonthsToFireForDelay - targetMonthsAway, 0)
+        : estimatedMonthsToFireForDelay == null
+          ? null
+          : Math.max(
+              estimatedJobLossMonthsToFireForDelay -
+                estimatedMonthsToFireForDelay,
+              0,
+            );
+  const jobLossExceedsProjectionHorizon =
+    jobLossMonthlyContribution != null && jobLossMonthsToFire == null;
+  const jobLossDelayIsLowerBound =
+    estimatedJobLossMonthsToFireForDelay == null &&
+    lowerBoundDelayMonths != null;
   const requiredMonthlyContribution =
     targetYearsAway == null
       ? null
@@ -353,6 +481,13 @@ export function calculateFireProjection(
     inferredMonthlyContribution,
     recurringMonthlyContribution,
     currentMonthlyContribution,
+    jobLossMonthlyContribution,
+    jobLossMonthsToFire,
+    jobLossYearsToFire:
+      jobLossMonthsToFire == null ? null : jobLossMonthsToFire / 12,
+    jobLossDelayMonths,
+    jobLossExceedsProjectionHorizon,
+    jobLossDelayIsLowerBound,
     observedMonthlyNetWorthChange,
     retirementProjection,
   };
