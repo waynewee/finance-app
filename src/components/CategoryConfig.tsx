@@ -8,6 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { type Category, type Subcategory } from "../data/defaultCategories";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 interface Props {
   categories: Category[];
@@ -31,6 +32,8 @@ export default function CategoryConfig({
   onUpdate,
   onClose,
 }: Props) {
+  useBodyScrollLock(true);
+
   const [draft, setDraft] = useState<Category[]>(structuredClone(categories));
   const [expandedCats, setExpandedCats] = useState<Set<string>>(
     new Set(draft.map((c) => c.id)),
@@ -149,8 +152,8 @@ export default function CategoryConfig({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
+      <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800">
@@ -165,7 +168,7 @@ export default function CategoryConfig({
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-4">
           {draft.map((cat, catIdx) => (
             <div
               key={cat.id}

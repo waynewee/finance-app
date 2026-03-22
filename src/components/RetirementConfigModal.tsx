@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Download, Flame, Plus, Trash2, Upload, X } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { sanitizeFireSettings } from "../lib/fire";
 import { type FireSettings } from "../lib/netWorthRepository";
 import {
@@ -163,6 +164,8 @@ export default function RetirementConfigModal({
   onUpdate,
   onClose,
 }: Props) {
+  useBodyScrollLock(true);
+
   const [retirementSystemDraft, setRetirementSystemDraft] = useState(
     sanitizeRetirementSystemConfig(settings.retirementSystem),
   );
@@ -695,8 +698,8 @@ export default function RetirementConfigModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="mx-4 flex max-h-[94vh] w-full max-w-7xl flex-col rounded-3xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
+      <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
@@ -715,7 +718,7 @@ export default function RetirementConfigModal({
           </button>
         </div>
 
-        <div className="grid gap-6 overflow-y-auto px-6 py-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="grid gap-6 overflow-y-auto overscroll-contain px-6 py-5 xl:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="space-y-6 rounded-2xl border border-orange-200 bg-orange-50/60 p-4">
             <div>
               <div className="mb-4 flex items-center gap-2 text-orange-800">

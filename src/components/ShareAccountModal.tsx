@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Mail, PencilLine, UserRoundPlus, Users, X } from "lucide-react";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import {
   type AccountCollaborator,
   type AccountInvitation,
@@ -43,6 +44,8 @@ export default function ShareAccountModal({
   onCancelInvitation,
   onClose,
 }: Props) {
+  useBodyScrollLock(true);
+
   const [draftAccountName, setDraftAccountName] = useState(accountName);
   const [inviteEmail, setInviteEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -135,8 +138,8 @@ export default function ShareAccountModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="mx-4 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
+      <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
@@ -154,7 +157,7 @@ export default function ShareAccountModal({
           </button>
         </div>
 
-        <div className="space-y-6 overflow-y-auto px-6 py-5">
+        <div className="space-y-6 overflow-y-auto overscroll-contain px-6 py-5">
           <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <div className="flex items-start gap-3">
               <div className="rounded-2xl bg-white p-3 text-[#1E7A18] shadow-sm">

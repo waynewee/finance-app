@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { MONTHS } from "../data/defaultCategories";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import {
   calculateFireProjection,
   getFireCalculationLookbackMonths,
@@ -308,6 +309,8 @@ export default function FireTracker({
     annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
     nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
   });
+
+  useBodyScrollLock(showTimeToFireSettingsModal);
 
   useEffect(() => {
     if (!showStalePopover) return;
@@ -1808,8 +1811,8 @@ export default function FireTracker({
       </section>
 
       {showTimeToFireSettingsModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-lg rounded-3xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -1830,7 +1833,7 @@ export default function FireTracker({
               </button>
             </div>
 
-            <div className="space-y-5 px-6 py-5">
+            <div className="space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm font-medium text-gray-900">
                   Calculation algorithm
