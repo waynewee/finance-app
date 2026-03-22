@@ -27,6 +27,7 @@ export interface FireSettingsRow {
   annual_spending_goal: number;
   withdrawal_rate: number;
   expected_annual_return: number;
+  job_loss_monthly_savings_reduction_months?: number | null;
   monthly_contribution: number;
   monthly_income?: number | null;
   retirement_system?: unknown;

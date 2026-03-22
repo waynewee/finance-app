@@ -2,8 +2,9 @@ import { DEFAULT_FIRE_SETTINGS, type FireSettings } from "./netWorthRepository";
 import {
   calculateRetirementProjection,
   sanitizeRetirementSystemConfig,
-  type RetirementProjectionResult,
   type RetirementBalancePeriod,
+  type RetirementProjectionResult,
+  type RetirementSystemConfig,
 } from "./retirementSystem";
 
 export interface FireProjectionSnapshot extends RetirementBalancePeriod {
@@ -94,6 +95,15 @@ function getReducedMonthlyContribution(
   }
 
   return Math.max(monthlyContribution - monthlySavingsReduction, 0);
+}
+
+function normalizeScenarioDurationMonths(value: number | null): number | null {
+  if (value == null || !Number.isFinite(value)) {
+    return null;
+  }
+
+  const roundedMonths = Math.round(value);
+  return roundedMonths > 0 ? roundedMonths : null;
 }
 
 function isValidDateOfBirth(value: string | null): value is string {
@@ -241,6 +251,9 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
       0,
       settings.jobLossMonthlySavingsReduction,
     ),
+    jobLossMonthlySavingsReductionMonths: normalizeScenarioDurationMonths(
+      settings.jobLossMonthlySavingsReductionMonths,
+    ),
     annualBonusMonthAdded: settings.annualBonusMonthAdded ?? null,
     nonRecurringBonusMonthAdded: settings.nonRecurringBonusMonthAdded ?? null,
     dateOfBirth: isValidDateOfBirth(settings.dateOfBirth)
@@ -276,32 +289,231 @@ function calculateProjectedMonthsToFire(
   projectionMonthLimit: number,
   spendingStartAge: number | null = settings.targetFireAge,
 ): number | null {
-  if (settings.retirementSystem) {
-    return calculateRetirementProjection({
-      currentNetWorth,
-      currentAge,
-      contributionStopAge: settings.retirementContributionStopAge,
-      spendingStartAge,
-      liquidMonthlyContribution: monthlyContribution,
-      preFireMonthlyLiquidInflow:
-        monthlyContribution + settings.preFireAnnualSpending / 12,
-      liquidAnnualReturn: settings.expectedAnnualReturn,
-      fallbackAnnualWithdrawalRate: settings.withdrawalRate,
-      preFireAnnualSpending: settings.preFireAnnualSpending,
-      annualSpendingGoal: settings.annualSpendingGoal,
-      fireNumber,
-      projectionMonths: projectionMonthLimit,
-      system: settings.retirementSystem,
-    }).monthsToFire;
-  }
-
-  return calculateMonthsToFire(
+  return calculateProjectedMonthsToFireForSchedule({
     currentNetWorth,
     fireNumber,
-    monthlyContribution,
-    settings.expectedAnnualReturn,
+    initialMonthlyContribution: monthlyContribution,
+    restoredMonthlyContribution: null,
+    restoredContributionStartsAfterMonths: null,
+    settings,
+    currentAge,
+    projectionMonthLimit,
+    spendingStartAge,
+    referencePeriod: null,
+  });
+}
+
+function calculateProjectedMonthsToFireForSchedule({
+  currentNetWorth,
+  fireNumber,
+  initialMonthlyContribution,
+  restoredMonthlyContribution,
+  restoredContributionStartsAfterMonths,
+  settings,
+  currentAge,
+  projectionMonthLimit,
+  spendingStartAge,
+  referencePeriod,
+}: {
+  currentNetWorth: number;
+  fireNumber: number;
+  initialMonthlyContribution: number;
+  restoredMonthlyContribution: number | null;
+  restoredContributionStartsAfterMonths: number | null;
+  settings: FireSettings;
+  currentAge: number | null;
+  projectionMonthLimit: number;
+  spendingStartAge: number | null;
+  referencePeriod: RetirementBalancePeriod | null;
+}): number | null {
+  const restoredAfterMonths = Math.min(
+    normalizeScenarioDurationMonths(restoredContributionStartsAfterMonths) ??
+      projectionMonthLimit,
     projectionMonthLimit,
   );
+
+  if (settings.retirementSystem) {
+    if (
+      restoredMonthlyContribution == null ||
+      restoredAfterMonths >= projectionMonthLimit
+    ) {
+      return calculateRetirementProjection({
+        currentNetWorth,
+        currentAge,
+        contributionStopAge: settings.retirementContributionStopAge,
+        spendingStartAge,
+        liquidMonthlyContribution: initialMonthlyContribution,
+        preFireMonthlyLiquidInflow:
+          initialMonthlyContribution + settings.preFireAnnualSpending / 12,
+        liquidAnnualReturn: settings.expectedAnnualReturn,
+        fallbackAnnualWithdrawalRate: settings.withdrawalRate,
+        preFireAnnualSpending: settings.preFireAnnualSpending,
+        annualSpendingGoal: settings.annualSpendingGoal,
+        fireNumber,
+        projectionMonths: projectionMonthLimit,
+        startingBalancePeriod: referencePeriod,
+        system: settings.retirementSystem,
+      }).monthsToFire;
+    }
+
+    return calculateRetirementMonthsToFireWithTemporaryContribution({
+      currentNetWorth,
+      fireNumber,
+      reducedMonthlyContribution: initialMonthlyContribution,
+      restoredMonthlyContribution,
+      reducedContributionMonths: restoredAfterMonths,
+      settings,
+      currentAge,
+      projectionMonthLimit,
+      spendingStartAge,
+      referencePeriod,
+    });
+  }
+
+  if (currentNetWorth >= fireNumber) {
+    return 0;
+  }
+
+  const monthlyReturnRate = toMonthlyReturnRate(settings.expectedAnnualReturn);
+  let balance = currentNetWorth;
+
+  for (let month = 1; month <= projectionMonthLimit; month += 1) {
+    const contribution =
+      restoredMonthlyContribution != null && month > restoredAfterMonths
+        ? restoredMonthlyContribution
+        : initialMonthlyContribution;
+    balance = balance * (1 + monthlyReturnRate) + contribution;
+    if (balance >= fireNumber) {
+      return month;
+    }
+  }
+
+  return null;
+}
+
+function createProjectionRestartSystem(
+  system: RetirementSystemConfig,
+  point: RetirementProjectionResult["projection"][number],
+  referencePeriod: RetirementBalancePeriod,
+): RetirementSystemConfig {
+  return {
+    ...system,
+    balanceHistory: Object.entries(point.accountBalances).map(
+      ([accountId, balance]) => ({
+        year: referencePeriod.year,
+        monthIndex: referencePeriod.monthIndex,
+        accountId,
+        balance,
+      }),
+    ),
+  };
+}
+
+function shiftReferencePeriod(
+  referencePeriod: RetirementBalancePeriod,
+  months: number,
+): RetirementBalancePeriod {
+  const absoluteMonth =
+    referencePeriod.year * 12 + referencePeriod.monthIndex + months;
+
+  return {
+    year: Math.floor(absoluteMonth / 12),
+    monthIndex: absoluteMonth % 12,
+  };
+}
+
+function calculateRetirementMonthsToFireWithTemporaryContribution({
+  currentNetWorth,
+  fireNumber,
+  reducedMonthlyContribution,
+  restoredMonthlyContribution,
+  reducedContributionMonths,
+  settings,
+  currentAge,
+  projectionMonthLimit,
+  spendingStartAge,
+  referencePeriod,
+}: {
+  currentNetWorth: number;
+  fireNumber: number;
+  reducedMonthlyContribution: number;
+  restoredMonthlyContribution: number;
+  reducedContributionMonths: number;
+  settings: FireSettings;
+  currentAge: number | null;
+  projectionMonthLimit: number;
+  spendingStartAge: number | null;
+  referencePeriod: RetirementBalancePeriod | null;
+}): number | null {
+  const system = settings.retirementSystem;
+  if (!system) {
+    return null;
+  }
+
+  const temporaryMonths = Math.min(
+    Math.max(reducedContributionMonths, 0),
+    projectionMonthLimit,
+  );
+  const firstPhase = calculateRetirementProjection({
+    currentNetWorth,
+    currentAge,
+    contributionStopAge: settings.retirementContributionStopAge,
+    spendingStartAge,
+    liquidMonthlyContribution: reducedMonthlyContribution,
+    preFireMonthlyLiquidInflow:
+      reducedMonthlyContribution + settings.preFireAnnualSpending / 12,
+    liquidAnnualReturn: settings.expectedAnnualReturn,
+    fallbackAnnualWithdrawalRate: settings.withdrawalRate,
+    preFireAnnualSpending: settings.preFireAnnualSpending,
+    annualSpendingGoal: settings.annualSpendingGoal,
+    fireNumber,
+    projectionMonths: temporaryMonths,
+    startingBalancePeriod: referencePeriod,
+    system,
+  });
+
+  if (firstPhase.monthsToFire != null) {
+    return firstPhase.monthsToFire;
+  }
+
+  if (temporaryMonths >= projectionMonthLimit) {
+    return null;
+  }
+
+  const restartPoint = firstPhase.projection[firstPhase.projection.length - 1];
+  if (!restartPoint) {
+    return null;
+  }
+
+  const nextReferencePeriod = shiftReferencePeriod(
+    referencePeriod ?? getProjectionReferencePeriod(),
+    temporaryMonths,
+  );
+  const resumedProjection = calculateRetirementProjection({
+    currentNetWorth: restartPoint.totalBalance,
+    currentAge: currentAge == null ? null : currentAge + temporaryMonths / 12,
+    contributionStopAge: settings.retirementContributionStopAge,
+    spendingStartAge,
+    liquidMonthlyContribution: restoredMonthlyContribution,
+    preFireMonthlyLiquidInflow:
+      restoredMonthlyContribution + settings.preFireAnnualSpending / 12,
+    liquidAnnualReturn: settings.expectedAnnualReturn,
+    fallbackAnnualWithdrawalRate: settings.withdrawalRate,
+    preFireAnnualSpending: settings.preFireAnnualSpending,
+    annualSpendingGoal: settings.annualSpendingGoal,
+    fireNumber,
+    projectionMonths: projectionMonthLimit - temporaryMonths,
+    startingBalancePeriod: nextReferencePeriod,
+    system: createProjectionRestartSystem(
+      system,
+      restartPoint,
+      nextReferencePeriod,
+    ),
+  });
+
+  return resumedProjection.monthsToFire == null
+    ? null
+    : temporaryMonths + resumedProjection.monthsToFire;
 }
 
 export function calculateFireProjection(
@@ -351,6 +563,9 @@ export function calculateFireProjection(
         normalizedSettings.jobLossMonthlySavingsReduction,
       )
     : null;
+  const jobLossReductionMonths = normalizeScenarioDurationMonths(
+    normalizedSettings.jobLossMonthlySavingsReductionMonths,
+  );
   const preFireMonthlySpending = normalizedSettings.preFireAnnualSpending / 12;
   const preFireMonthlyLiquidInflow =
     (currentMonthlyContribution ?? 0) + preFireMonthlySpending;
@@ -393,8 +608,6 @@ export function calculateFireProjection(
     normalizedSettings.targetFireAge > currentAge
       ? normalizedSettings.targetFireAge - currentAge
       : null;
-  const targetMonthsAway =
-    targetYearsAway == null ? null : Math.round(targetYearsAway * 12);
   const estimatedMonthsToFireForDelay =
     currentMonthlyContribution == null
       ? null
@@ -410,45 +623,53 @@ export function calculateFireProjection(
   const jobLossMonthsToFire =
     jobLossMonthlyContribution == null
       ? null
-      : calculateProjectedMonthsToFire(
+      : calculateProjectedMonthsToFireForSchedule({
           currentNetWorth,
           fireNumber,
-          jobLossMonthlyContribution,
-          normalizedSettings,
+          initialMonthlyContribution: jobLossMonthlyContribution,
+          restoredMonthlyContribution: currentMonthlyContribution,
+          restoredContributionStartsAfterMonths: jobLossReductionMonths,
+          settings: normalizedSettings,
           currentAge,
           projectionMonthLimit,
-          null,
-        );
+          spendingStartAge: null,
+          referencePeriod: getProjectionReferencePeriod(
+            snapshots?.currentSnapshot,
+          ),
+        });
   const estimatedJobLossMonthsToFireForDelay =
     jobLossMonthlyContribution == null
       ? null
-      : calculateProjectedMonthsToFire(
+      : calculateProjectedMonthsToFireForSchedule({
           currentNetWorth,
           fireNumber,
-          jobLossMonthlyContribution,
-          normalizedSettings,
+          initialMonthlyContribution: jobLossMonthlyContribution,
+          restoredMonthlyContribution: currentMonthlyContribution,
+          restoredContributionStartsAfterMonths: jobLossReductionMonths,
+          settings: normalizedSettings,
           currentAge,
-          MAX_PROJECTION_MONTHS,
-          null,
-        );
+          projectionMonthLimit: MAX_PROJECTION_MONTHS,
+          spendingStartAge: null,
+          referencePeriod: getProjectionReferencePeriod(
+            snapshots?.currentSnapshot,
+          ),
+        });
   const lowerBoundDelayMonths =
     jobLossMonthlyContribution != null &&
     jobLossMonthsToFire == null &&
-    targetMonthsAway != null
-      ? Math.max(projectionMonthLimit - targetMonthsAway, 0)
+    estimatedMonthsToFireForDelay != null
+      ? Math.max(projectionMonthLimit - estimatedMonthsToFireForDelay, 0)
       : null;
   const jobLossDelayMonths =
     estimatedJobLossMonthsToFireForDelay == null
       ? lowerBoundDelayMonths
-      : targetMonthsAway != null
-        ? Math.max(estimatedJobLossMonthsToFireForDelay - targetMonthsAway, 0)
-        : estimatedMonthsToFireForDelay == null
-          ? null
-          : Math.max(
-              estimatedJobLossMonthsToFireForDelay -
-                estimatedMonthsToFireForDelay,
-              0,
-            );
+      : estimatedMonthsToFireForDelay == null
+        ? null
+        : Math.max(
+            estimatedJobLossMonthsToFireForDelay -
+              estimatedMonthsToFireForDelay,
+            0,
+          );
   const jobLossExceedsProjectionHorizon =
     jobLossMonthlyContribution != null && jobLossMonthsToFire == null;
   const jobLossDelayIsLowerBound =

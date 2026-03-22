@@ -13,6 +13,7 @@ export interface FireSettings {
   annualBonusAmount: number;
   nonRecurringBonusAmount: number;
   jobLossMonthlySavingsReduction: number;
+  jobLossMonthlySavingsReductionMonths: number | null;
   annualBonusMonthAdded: string | null;
   nonRecurringBonusMonthAdded: string | null;
   dateOfBirth: string | null;
@@ -31,6 +32,7 @@ export const DEFAULT_FIRE_SETTINGS: FireSettings = {
   annualBonusAmount: 0,
   nonRecurringBonusAmount: 0,
   jobLossMonthlySavingsReduction: 0,
+  jobLossMonthlySavingsReductionMonths: null,
   annualBonusMonthAdded: null,
   nonRecurringBonusMonthAdded: null,
   dateOfBirth: null,
@@ -86,6 +88,7 @@ interface FireSettingsRow {
   annual_bonus_amount?: number | null;
   non_recurring_bonus_amount?: number | null;
   job_loss_monthly_savings_reduction?: number | null;
+  job_loss_monthly_savings_reduction_months?: number | null;
   annual_bonus_month_added?: string | null;
   non_recurring_bonus_month_added?: string | null;
   monthly_contribution: number;
@@ -139,6 +142,13 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     annualBonusAmount: row.annual_bonus_amount ?? 0,
     nonRecurringBonusAmount: row.non_recurring_bonus_amount ?? 0,
     jobLossMonthlySavingsReduction: row.job_loss_monthly_savings_reduction ?? 0,
+    jobLossMonthlySavingsReductionMonths:
+      row.job_loss_monthly_savings_reduction_months == null
+        ? null
+        : Math.max(
+            1,
+            Math.round(row.job_loss_monthly_savings_reduction_months),
+          ),
     annualBonusMonthAdded: row.annual_bonus_month_added
       ? row.annual_bonus_month_added.slice(0, 7)
       : null,
@@ -170,6 +180,8 @@ function mapFireSettingsToRow(
     annual_bonus_amount: settings.annualBonusAmount,
     non_recurring_bonus_amount: settings.nonRecurringBonusAmount,
     job_loss_monthly_savings_reduction: settings.jobLossMonthlySavingsReduction,
+    job_loss_monthly_savings_reduction_months:
+      settings.jobLossMonthlySavingsReductionMonths,
     annual_bonus_month_added: settings.annualBonusMonthAdded
       ? `${settings.annualBonusMonthAdded}-01`
       : null,
@@ -258,7 +270,7 @@ export async function loadNetWorthState(userId: string): Promise<{
     supabase
       .from("fire_settings")
       .select(
-        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, non_recurring_bonus_amount, job_loss_monthly_savings_reduction, annual_bonus_month_added, non_recurring_bonus_month_added, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
+        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, non_recurring_bonus_amount, job_loss_monthly_savings_reduction, job_loss_monthly_savings_reduction_months, annual_bonus_month_added, non_recurring_bonus_month_added, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
       )
       .eq("user_id", userId),
   ]);

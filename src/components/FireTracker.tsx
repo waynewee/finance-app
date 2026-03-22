@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -18,6 +18,7 @@ import {
   getFireCalculationLookbackMonths,
   getCurrentAgeFromDateOfBirth,
   sanitizeFireSettings,
+  type FireProjection,
   type FireProjectionSnapshot,
 } from "../lib/fire";
 import { type FireSnapshotPreference } from "../lib/firePreferences";
@@ -25,6 +26,7 @@ import { type FireSettings } from "../lib/netWorthRepository";
 import type {
   RetirementAccountClassification,
   RetirementMemberProjection,
+  RetirementProjectionPoint,
 } from "../lib/retirementSystem";
 import { getLatestRetirementBalancePeriod } from "../lib/retirementSystem";
 import {
@@ -53,6 +55,17 @@ interface Props {
 
 type FireTrackerView = "display" | "settings";
 
+type TimeToFireSettingsDraft = Pick<
+  FireSettings,
+  | "timeToFireAlgorithm"
+  | "annualBonusAmount"
+  | "nonRecurringBonusAmount"
+  | "jobLossMonthlySavingsReduction"
+  | "jobLossMonthlySavingsReductionMonths"
+  | "annualBonusMonthAdded"
+  | "nonRecurringBonusMonthAdded"
+>;
+
 interface ProgressBarConfig {
   fillPercent: number;
   fillClassName: string;
@@ -68,6 +81,14 @@ interface SummaryCard {
   accent: string;
   hasSettingsButton?: boolean;
   progressBar?: ProgressBarConfig;
+}
+
+interface ProjectionMathRow {
+  point: RetirementProjectionPoint;
+  liquidChange: number;
+  retirementChange: number;
+  growthChange: number;
+  expenseChange: number;
 }
 
 function parseNumber(value: string): number {
@@ -128,17 +149,26 @@ function formatYears(value: number | null): string {
   return `${value.toFixed(1)} years`;
 }
 
-function formatDelayFromMonths(value: number | null): string {
+function formatDelayDuration(value: number | null): string {
   if (value == null || !Number.isFinite(value) || value <= 0) {
     return "no delay";
   }
 
-  if (value < 12) {
+  if (value < 6) {
     const roundedMonths = Math.round(value);
     return `${roundedMonths} ${roundedMonths === 1 ? "month" : "months"}`;
   }
 
   return `${(value / 12).toFixed(1)} years`;
+}
+
+function formatMonthCount(value: number | null): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) {
+    return "an ongoing period";
+  }
+
+  const roundedMonths = Math.round(value);
+  return `${roundedMonths} ${roundedMonths === 1 ? "month" : "months"}`;
 }
 
 function formatPercent(value: number): string {
@@ -273,6 +303,1095 @@ function isBonusMonthOutsideTtmWindow(
   );
 }
 
+function getTimeToFireSettingsDraft(
+  fireSettings: FireSettings,
+): TimeToFireSettingsDraft {
+  return {
+    timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
+    annualBonusAmount: fireSettings.annualBonusAmount,
+    nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
+    jobLossMonthlySavingsReduction: fireSettings.jobLossMonthlySavingsReduction,
+    jobLossMonthlySavingsReductionMonths:
+      fireSettings.jobLossMonthlySavingsReductionMonths,
+    annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
+    nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
+  };
+}
+
+function TimeToFireSettingsModal({
+  fireSettings,
+  ttmRangeLabel,
+  ttmWindowStartOrdinal,
+  ttmWindowEndOrdinal,
+  onClose,
+  onSave,
+}: {
+  fireSettings: FireSettings;
+  ttmRangeLabel: string;
+  ttmWindowStartOrdinal: number | null;
+  ttmWindowEndOrdinal: number | null;
+  onClose: () => void;
+  onSave: (draft: TimeToFireSettingsDraft) => void;
+}) {
+  const [draftTimeToFireSettings, setDraftTimeToFireSettings] =
+    useState<TimeToFireSettingsDraft>(() =>
+      getTimeToFireSettingsDraft(fireSettings),
+    );
+
+  useBodyScrollLock(true);
+
+  const isDraftAnnualBonusMonthStale =
+    draftTimeToFireSettings.annualBonusAmount > 0 &&
+    isBonusMonthOutsideTtmWindow(
+      draftTimeToFireSettings.annualBonusMonthAdded,
+      ttmWindowStartOrdinal,
+      ttmWindowEndOrdinal,
+    );
+  const isDraftNonRecurringBonusMonthStale =
+    draftTimeToFireSettings.nonRecurringBonusAmount > 0 &&
+    isBonusMonthOutsideTtmWindow(
+      draftTimeToFireSettings.nonRecurringBonusMonthAdded,
+      ttmWindowStartOrdinal,
+      ttmWindowEndOrdinal,
+    );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
+      <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Time to FIRE Settings
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Choose how the widget infers savings and include annual bonus or
+              one-off monthly amounts.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 transition-colors hover:text-gray-600"
+            aria-label="Close Time to FIRE settings"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm font-medium text-gray-900">
+              Calculation algorithm
+            </p>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              TTM averages inferred savings across the last 12 recorded months
+              before the selected snapshot.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setDraftTimeToFireSettings((prev) => ({
+                  ...prev,
+                  timeToFireAlgorithm: "ttm",
+                }))
+              }
+              className="mt-3 w-full rounded-2xl border border-orange-300 bg-orange-50 px-4 py-4 text-left shadow-sm"
+            >
+              <span className="block text-sm font-semibold text-orange-800">
+                Twelve trailing months (TTM)
+              </span>
+              <span className="mt-1 block text-xs text-orange-700/80">
+                Uses the trailing 12 months of net worth history for the Time to
+                FIRE calculation. The adjustment field below only applies to
+                this TTM algorithm.
+              </span>
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <span className="text-xs uppercase tracking-wide text-gray-400">
+              <b>Recurring</b> annual bonus or large amount
+            </span>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              Applies only to TTM. Removes this amount from the trailing window
+              and adds back a normalized monthly equivalent ({ttmRangeLabel}).
+            </p>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={draftTimeToFireSettings.annualBonusAmount}
+              onChange={(event) =>
+                setDraftTimeToFireSettings((prev) => ({
+                  ...prev,
+                  annualBonusAmount: parseNumber(event.target.value),
+                }))
+              }
+              className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+            />
+            <div className="mt-3">
+              <label className="block text-xs text-gray-500">
+                Month received
+              </label>
+              <input
+                type="month"
+                value={draftTimeToFireSettings.annualBonusMonthAdded ?? ""}
+                onChange={(event) =>
+                  setDraftTimeToFireSettings((prev) => ({
+                    ...prev,
+                    annualBonusMonthAdded: event.target.value || null,
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+              />
+              {isDraftAnnualBonusMonthStale ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  This month is outside the current TTM window ({ttmRangeLabel}
+                  ). Update or clear this setting.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <span className="text-xs uppercase tracking-wide text-gray-400">
+              <b>Non-recurring</b> bonus or large amount
+            </span>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              Applies only to TTM. Fully removes this one-time amount from the
+              trailing window without adding anything back ({ttmRangeLabel}).
+            </p>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={draftTimeToFireSettings.nonRecurringBonusAmount}
+              onChange={(event) =>
+                setDraftTimeToFireSettings((prev) => ({
+                  ...prev,
+                  nonRecurringBonusAmount: parseNumber(event.target.value),
+                }))
+              }
+              className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+            />
+            <div className="mt-3">
+              <label className="block text-xs text-gray-500">
+                Month received
+              </label>
+              <input
+                type="month"
+                value={
+                  draftTimeToFireSettings.nonRecurringBonusMonthAdded ?? ""
+                }
+                onChange={(event) =>
+                  setDraftTimeToFireSettings((prev) => ({
+                    ...prev,
+                    nonRecurringBonusMonthAdded: event.target.value || null,
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+              />
+              {isDraftNonRecurringBonusMonthStale ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  This month is outside the current TTM window ({ttmRangeLabel}
+                  ). Update or clear this setting.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <span className="text-xs uppercase tracking-wide text-gray-400">
+              <b>Job-loss</b> monthly savings reduction
+            </span>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              Reduces your current inferred TTM monthly savings by this amount
+              to estimate how much losing your job would delay FIRE.
+            </p>
+            <input
+              type="number"
+              min="0"
+              step="100"
+              value={draftTimeToFireSettings.jobLossMonthlySavingsReduction}
+              onChange={(event) =>
+                setDraftTimeToFireSettings((prev) => ({
+                  ...prev,
+                  jobLossMonthlySavingsReduction: parseNumber(
+                    event.target.value,
+                  ),
+                }))
+              }
+              className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+            />
+            <div className="mt-3">
+              <label className="block text-xs text-gray-500">
+                Months impacted
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={
+                  draftTimeToFireSettings.jobLossMonthlySavingsReductionMonths ??
+                  ""
+                }
+                onChange={(event) =>
+                  setDraftTimeToFireSettings((prev) => ({
+                    ...prev,
+                    jobLossMonthlySavingsReductionMonths: parseOptionalNumber(
+                      event.target.value,
+                    ),
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(draftTimeToFireSettings)}
+            className="rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:from-orange-600 hover:to-red-600"
+          >
+            Save Time to FIRE Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const FireTrackerProjectionView = memo(function FireTrackerProjectionView({
+  hideValues,
+  projection,
+  fireSettings,
+  selectedSnapshot,
+  previousSnapshot,
+  snapshotPreference,
+  selectedMonthLabel,
+  hasEnoughSavingsHistory,
+  missingSavingsHistoryCount,
+  oldestSavingsSnapshot,
+  ttmRangeLabel,
+  currentAge,
+  onOpenTimeToFireSettings,
+}: {
+  hideValues: boolean;
+  projection: FireProjection;
+  fireSettings: FireSettings;
+  selectedSnapshot: LatestSnapshot;
+  previousSnapshot: LatestSnapshot | null;
+  snapshotPreference: FireSnapshotPreference;
+  selectedMonthLabel: string;
+  hasEnoughSavingsHistory: boolean;
+  missingSavingsHistoryCount: number;
+  oldestSavingsSnapshot: LatestSnapshot | null;
+  ttmRangeLabel: string;
+  currentAge: number | null;
+  onOpenTimeToFireSettings: (open: boolean) => void;
+}) {
+  const fundedPercent = Math.max(0, (projection.fundedRatio ?? 0) * 100);
+  const progressBar = getProgressBarConfig(fundedPercent);
+  const retirementProjection = projection.retirementProjection ?? null;
+  const projectionDeadlineAge = fireSettings.predictedDeathAge;
+  const jobLossDurationSummary = formatMonthCount(
+    fireSettings.jobLossMonthlySavingsReductionMonths,
+  );
+  const showJobLossCard = fireSettings.jobLossMonthlySavingsReduction > 0;
+  const targetAgeSummary =
+    projection.targetYearsAway == null
+      ? "Add your date of birth and target FIRE age in settings."
+      : projection.requiredMonthlyContribution == null
+        ? "Target age requires a savings level outside the planner range."
+        : projection.requiredMonthlyContribution <=
+            (projection.currentMonthlyContribution ?? 0)
+          ? `On track for age ${fireSettings.targetFireAge}.`
+          : `${formatCurrency(projection.requiredMonthlyContribution)} per month needed to reach age ${fireSettings.targetFireAge}.`;
+  const targetAgeMathSummary =
+    projection.requiredMonthlyContribution == null
+      ? null
+      : `This estimate includes growth on today's balances and monthly savings${retirementProjection ? ", plus retirement balances that become usable by your target age" : ""}.`;
+  const contributionSummary =
+    !hasEnoughSavingsHistory || projection.currentMonthlyContribution == null
+      ? `Add ${missingSavingsHistoryCount} earlier net worth ${missingSavingsHistoryCount === 1 ? "month" : "months"} to calculate your trailing 12-month liquid savings rate.`
+      : fireSettings.annualBonusAmount > 0 ||
+          fireSettings.nonRecurringBonusAmount > 0
+        ? (() => {
+            const parts: string[] = [];
+            if (fireSettings.annualBonusAmount > 0) {
+              parts.push(
+                `removing ${formatCurrency(fireSettings.annualBonusAmount)} recurring annual inflow (normalized to ${formatMonthlyEquivalentFromOneOff(fireSettings.annualBonusAmount)}/mo)`,
+              );
+            }
+            if (fireSettings.nonRecurringBonusAmount > 0) {
+              parts.push(
+                `removing ${formatCurrency(fireSettings.nonRecurringBonusAmount)} non-recurring amount entirely`,
+              );
+            }
+            return `${formatCurrency(projection.currentMonthlyContribution)} per month from TTM (${ttmRangeLabel}) after ${parts.join(" and ")}.`;
+          })()
+        : `${formatCurrency(projection.currentMonthlyContribution)} per month averaged across trailing 12 months from ${formatMonthPeriod(oldestSavingsSnapshot!.year, oldestSavingsSnapshot!.monthIndex)} to ${selectedMonthLabel}.`;
+  const timeToFireValue =
+    hasEnoughSavingsHistory && projection.currentMonthlyContribution != null
+      ? projection.yearsToFire == null && projectionDeadlineAge != null
+        ? `Not by age ${projectionDeadlineAge}`
+        : formatYears(projection.yearsToFire)
+      : "- years";
+  const jobLossSummary =
+    fireSettings.jobLossMonthlySavingsReduction <= 0
+      ? null
+      : projection.jobLossMonthlyContribution == null
+        ? "Add enough trailing net worth history before using the job-loss delay estimate."
+        : projection.jobLossExceedsProjectionHorizon
+          ? `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)} for ${jobLossDurationSummary}, ongoing savings fall to ${formatCurrency(projection.jobLossMonthlyContribution)} per month during that period and your target FIRE timing is delayed by ${projection.jobLossDelayIsLowerBound ? `at least ${formatDelayDuration(projection.jobLossDelayMonths)}` : formatDelayDuration(projection.jobLossDelayMonths)}, pushing it beyond the current projection horizon.`
+          : projection.jobLossMonthsToFire == null
+            ? `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)} for ${jobLossDurationSummary}, this plan does not reach FIRE within the current projection horizon.`
+            : `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)} for ${jobLossDurationSummary}, ongoing savings fall to ${formatCurrency(projection.jobLossMonthlyContribution)} per month during that period, delaying your target FIRE timing by ${formatDelayDuration(projection.jobLossDelayMonths)} to ${formatYears(projection.jobLossYearsToFire)} total.`;
+  const jobLossCardValue =
+    projection.jobLossMonthlyContribution == null
+      ? "Need history"
+      : projection.jobLossDelayIsLowerBound
+        ? `>= ${formatDelayDuration(projection.jobLossDelayMonths)}`
+        : formatDelayDuration(projection.jobLossDelayMonths);
+  const displayCurrency = (value: number): string =>
+    maskDisplayValue(formatCurrency(value), hideValues);
+  const displayNegativeCurrency = (value: number): string =>
+    maskDisplayValue(formatNegativeCurrency(value), hideValues);
+  const displaySignedCurrency = (value: number): string =>
+    maskDisplayValue(formatSignedCurrency(value), hideValues);
+  const displayPercent = (value: number): string =>
+    maskDisplayValue(formatPercent(value), hideValues);
+  const displayAge = (value: number | null): string =>
+    maskDisplayValue(formatAge(value), hideValues);
+  const displayMemberIncome = (member: RetirementMemberProjection): string =>
+    hideValues ? HIDDEN_VALUE : formatMemberIncome(member);
+  const displayInlineText = (text: string): string =>
+    maskInlineNumbers(text, hideValues);
+  const displayCalendarYear = (year: number): string =>
+    hideValues ? HIDDEN_VALUE : String(year);
+
+  const cards: SummaryCard[] = [
+    {
+      label: "FIRE Number",
+      value: displayCurrency(projection.fireNumber ?? 0),
+      helper: displayInlineText(
+        `${formatCurrency(fireSettings.annualSpendingGoal)} spending at ${formatPercent(fireSettings.withdrawalRate)}`,
+      ),
+      icon: Flame,
+      accent: "from-amber-500/20 to-red-500/10 text-orange-700",
+    },
+    {
+      label: "Current Progress",
+      value: displayPercent(fundedPercent),
+      helper: displayInlineText(
+        `${formatCurrency(projection.gapToGoal ?? 0)} still to go from ${formatCurrency(projection.accessibleNetWorth ?? 0)} accessible today`,
+      ),
+      icon: Landmark,
+      accent: "from-orange-500/15 to-red-500/10 text-red-700",
+      progressBar,
+    },
+    {
+      label: "Time To FIRE",
+      value: maskDisplayValue(timeToFireValue, hideValues),
+      helper: displayInlineText(
+        `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
+      ),
+      icon: TrendingUp,
+      accent: "from-orange-400/20 to-amber-500/10 text-orange-700",
+      hasSettingsButton: true,
+    },
+    ...(showJobLossCard
+      ? [
+          {
+            label: "Job-Loss FIRE Delay",
+            value: maskDisplayValue(jobLossCardValue, hideValues),
+            helper: displayInlineText(
+              jobLossSummary ??
+                "Add enough trailing net worth history before using the job-loss delay estimate.",
+            ),
+            icon: AlertTriangle,
+            accent: "from-amber-500/20 to-orange-500/10 text-amber-700",
+          },
+        ]
+      : []),
+    {
+      label: `Monthly Savings to retire by ${fireSettings.targetFireAge}`,
+      value:
+        projection.requiredMonthlyContribution == null
+          ? "Set age target"
+          : displayCurrency(projection.requiredMonthlyContribution),
+      helper: displayInlineText(
+        currentAge == null
+          ? [targetAgeSummary, targetAgeMathSummary].filter(Boolean).join(" ")
+          : [
+              targetAgeSummary,
+              `Current age: ${currentAge}.`,
+              targetAgeMathSummary,
+            ]
+              .filter(Boolean)
+              .join(" "),
+      ),
+      icon: Goal,
+      accent: "from-red-500/20 to-orange-500/10 text-red-700",
+    },
+  ];
+
+  const liquidityCards = retirementProjection
+    ? [
+        {
+          label: "Liquid",
+          value: displayCurrency(retirementProjection.breakdown.liquid),
+        },
+        {
+          label: "Semi-liquid",
+          value: displayCurrency(retirementProjection.breakdown.semiLiquid),
+        },
+        {
+          label: "Locked",
+          value: displayCurrency(retirementProjection.breakdown.locked),
+        },
+        {
+          label: "Restricted",
+          value: displayCurrency(retirementProjection.breakdown.restricted),
+        },
+      ]
+    : [];
+
+  const { projectionMathRows, projectionHighlights } = useMemo(() => {
+    const fireProjectionStartMonth = getDrawdownStartMonth(
+      currentAge,
+      fireSettings.targetFireAge,
+      retirementProjection?.monthsToFire ?? null,
+    );
+    const visibleProjection =
+      retirementProjection == null || fireProjectionStartMonth == null
+        ? []
+        : retirementProjection.projection.filter(
+            (point) => point.month >= fireProjectionStartMonth,
+          );
+    const nextProjectionMathRows: ProjectionMathRow[] = visibleProjection.map(
+      (point, index) => {
+        const previousPoint = visibleProjection[index - 1];
+
+        return {
+          point,
+          liquidChange:
+            previousPoint == null
+              ? 0
+              : point.cumulativeLiquidContributions -
+                previousPoint.cumulativeLiquidContributions,
+          retirementChange:
+            previousPoint == null
+              ? 0
+              : point.cumulativeRetirementContributions -
+                previousPoint.cumulativeRetirementContributions,
+          growthChange:
+            previousPoint == null
+              ? 0
+              : point.cumulativeInvestmentGrowth -
+                previousPoint.cumulativeInvestmentGrowth,
+          expenseChange:
+            previousPoint == null
+              ? 0
+              : point.cumulativeProjectedSpending -
+                previousPoint.cumulativeProjectedSpending,
+        };
+      },
+    );
+
+    return {
+      projectionMathRows: nextProjectionMathRows,
+      projectionHighlights: visibleProjection.slice(0, 6),
+    };
+  }, [currentAge, fireSettings.targetFireAge, retirementProjection]);
+
+  const latestRetirementBalancePeriod = retirementProjection?.balancePeriod;
+  const projectionStartTotal = projectionHighlights[0]?.totalBalance ?? 0;
+
+  return (
+    <>
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => onOpenTimeToFireSettings(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+        >
+          <Settings size={15} />
+          Time to FIRE Settings
+        </button>
+      </div>
+      <div
+        className={`grid gap-4 md:grid-cols-2 ${showJobLossCard ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}
+      >
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <article
+              key={card.label}
+              className="rounded-2xl border border-gray-200 bg-white p-4"
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    {card.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                    {card.value}
+                  </p>
+                </div>
+                <div
+                  className={`rounded-2xl bg-gradient-to-br p-3 ${card.accent}`}
+                >
+                  <Icon size={18} />
+                </div>
+              </div>
+              <p className="text-sm leading-6 text-gray-500">{card.helper}</p>
+              {card.progressBar ? (
+                <div className="mt-4">
+                  <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r transition-all duration-500 ${card.progressBar.fillClassName}`}
+                      style={{ width: `${card.progressBar.fillPercent}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    <span className={card.progressBar.labelClassName}>
+                      {card.progressBar.label}
+                    </span>
+                    <span>{formatPercent(card.progressBar.fillPercent)}</span>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        Gross net worth is {displayCurrency(projection.grossNetWorth)} from your
+        selected recorded net worth. FIRE progress uses{" "}
+        {displayCurrency(projection.accessibleNetWorth)} after excluding
+        retirement balances that are not yet available under the configured
+        withdrawal rules.
+      </div>
+
+      {snapshotPreference === "previous" && !previousSnapshot ? (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Previous-month FIRE view is saved as your preference, but there is no
+          earlier recorded month yet, so the tracker is using{" "}
+          {hideValues ? HIDDEN_VALUE : selectedMonthLabel}.
+        </div>
+      ) : null}
+
+      {!hasEnoughSavingsHistory ? (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {missingSavingsHistoryCount > 0
+            ? `The time-to-FIRE widget uses a trailing 12-month calculation, but there is not enough earlier history yet. Add ${missingSavingsHistoryCount} more recorded ${missingSavingsHistoryCount === 1 ? "month" : "months"} to use it.`
+            : "Not enough history is available to calculate the trailing 12-month savings rate."}
+        </div>
+      ) : null}
+
+      {retirementProjection ? (
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+          <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Retirement System
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {fireSettings.retirementSystem?.name ?? "Configured system"}
+                </p>
+                {latestRetirementBalancePeriod ? (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Latest balances from{" "}
+                    {formatMonthPeriod(
+                      latestRetirementBalancePeriod.year,
+                      latestRetirementBalancePeriod.monthIndex,
+                    )}
+                  </p>
+                ) : null}
+              </div>
+              <div className="w-full rounded-2xl bg-white px-3 py-2 text-left shadow-sm sm:w-auto sm:text-right">
+                <p className="text-xs uppercase tracking-wide text-gray-400">
+                  Est. income
+                </p>
+                <p className="text-sm font-semibold text-green-700">
+                  {displayCurrency(
+                    retirementProjection.estimatedMonthlyRetirementIncome,
+                  )}
+                  /mo
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              {liquidityCards.map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-2xl border border-orange-100 bg-white px-4 py-3"
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                    {card.label}
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-gray-900">
+                    {card.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm text-gray-600">
+              Payout phase starts at age{" "}
+              {hideValues
+                ? HIDDEN_VALUE
+                : (retirementProjection.payoutStartAge ?? "n/a")}
+              . Restricted balances stay excluded from usable FIRE assets.
+              {displayInlineText(
+                `${fireSettings.preFireAnnualSpending > 0 ? ` Pre-FIRE spending is estimated at ${formatCurrency(fireSettings.preFireAnnualSpending)} per year.` : ""}${fireSettings.annualSpendingGoal > 0 ? ` Projected spending of ${formatCurrency(fireSettings.annualSpendingGoal)} per year is deducted during drawdown.` : ""}${fireSettings.retirementContributionStopAge != null ? ` Retirement contributions stop at age ${fireSettings.retirementContributionStopAge}.` : ""}${projectionDeadlineAge != null ? ` Projection horizon ends at age ${projectionDeadlineAge}.` : ""}`,
+              )}
+            </div>
+          </section>
+
+          <div className="space-y-6">
+            {retirementProjection.memberProjections.length > 0 ? (
+              <section className="rounded-2xl border border-gray-200 bg-white">
+                <div className="border-b border-gray-200 px-4 py-3">
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Member CPF Summary
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Individual retirement balances are tracked separately and
+                    then rolled up into household FIRE progress.
+                  </p>
+                </div>
+                <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {retirementProjection.memberProjections.map((member) => (
+                    <article
+                      key={member.id}
+                      className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {member.name}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
+                            Age {displayAge(member.currentAge)} · Income{" "}
+                            {displayMemberIncome(member)}/mo
+                          </p>
+                        </div>
+                        <div className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-left sm:w-auto sm:text-right">
+                          <p className="text-xs uppercase tracking-wide text-gray-400">
+                            Income
+                          </p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {displayMemberIncome(member)}/mo
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-lg font-semibold text-gray-900">
+                        {displayCurrency(member.currentBalance)}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Current retirement balance
+                      </p>
+                      <p className="mt-3 text-sm text-gray-600">
+                        {displayInlineText(
+                          `${formatCurrency(member.projectedBalance)} at end of timeline · ${formatCurrency(member.estimatedMonthlyIncome)}/mo income`,
+                        )}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="rounded-2xl border border-gray-200 bg-white">
+              <div className="border-b border-gray-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Account Balances
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Current balances, payout-eligible balances, and long-range
+                  projections by configured account.
+                </p>
+              </div>
+              <div className="space-y-3 p-4 md:hidden">
+                {retirementProjection.accountProjections.map((account) => (
+                  <article
+                    key={account.id}
+                    className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {account.name}
+                        </p>
+                        <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
+                          {account.memberName ?? "Household"} ·{" "}
+                          {formatClassification(account.classification)}
+                        </p>
+                        <p className="mt-2 text-xs text-gray-500">
+                          {displayInlineText(
+                            `${formatPercent(account.annualReturnRate)} return${account.minimumWithdrawalAge != null ? ` · age ${account.minimumWithdrawalAge}+` : ""}`,
+                          )}
+                        </p>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-gray-400">
+                            Current
+                          </dt>
+                          <dd className="mt-1 font-semibold text-gray-900">
+                            {displayCurrency(account.currentBalance)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-gray-400">
+                            At payout
+                          </dt>
+                          <dd className="mt-1 font-semibold text-gray-900">
+                            {account.projectedBalanceAtPayout == null
+                              ? "n/a"
+                              : displayCurrency(
+                                  account.projectedBalanceAtPayout,
+                                )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-gray-400">
+                            End timeline
+                          </dt>
+                          <dd className="mt-1 font-semibold text-gray-900">
+                            {displayCurrency(account.projectedBalance)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-gray-400">
+                            Income
+                          </dt>
+                          <dd className="mt-1 font-semibold text-green-700">
+                            {account.estimatedMonthlyIncome > 0
+                              ? `${displayCurrency(account.estimatedMonthlyIncome)}/mo`
+                              : "n/a"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Member</th>
+                      <th className="px-4 py-3 font-medium">Account</th>
+                      <th className="px-4 py-3 font-medium">Class</th>
+                      <th className="px-4 py-3 font-medium">Current</th>
+                      <th className="px-4 py-3 font-medium">At Payout</th>
+                      <th className="px-4 py-3 font-medium">End Timeline</th>
+                      <th className="px-4 py-3 font-medium">Income</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {retirementProjection.accountProjections.map((account) => (
+                      <tr key={account.id}>
+                        <td className="px-4 py-3 text-gray-600">
+                          {account.memberName ?? "Household"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {account.name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {displayInlineText(
+                                `${formatPercent(account.annualReturnRate)} return${account.minimumWithdrawalAge != null ? ` · age ${account.minimumWithdrawalAge}+` : ""}`,
+                              )}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {formatClassification(account.classification)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">
+                          {displayCurrency(account.currentBalance)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">
+                          {account.projectedBalanceAtPayout == null
+                            ? "n/a"
+                            : displayCurrency(account.projectedBalanceAtPayout)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">
+                          {displayCurrency(account.projectedBalance)}
+                        </td>
+                        <td className="px-4 py-3 text-green-700">
+                          {account.estimatedMonthlyIncome > 0
+                            ? `${displayCurrency(account.estimatedMonthlyIncome)}/mo`
+                            : "n/a"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-gray-200 bg-white">
+              <div className="border-b border-gray-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Projection Timeline
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {projectionDeadlineAge != null
+                    ? displayInlineText(
+                        `Retirement-phase checkpoints from the FIRE year through age ${projectionDeadlineAge}.`,
+                      )
+                    : "Retirement-phase checkpoints starting from the FIRE year."}
+                </p>
+              </div>
+              {projectionHighlights.length > 0 ? (
+                <>
+                  <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {projectionHighlights.map((point, index) => (
+                      <article
+                        key={point.month}
+                        className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {index === 0
+                                ? "FIRE year"
+                                : hideValues
+                                  ? HIDDEN_VALUE
+                                  : `+${point.yearOffset - projectionHighlights[0].yearOffset} yr`}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
+                              {displayCalendarYear(
+                                getProjectionCalendarYear(
+                                  selectedSnapshot,
+                                  point.month,
+                                ),
+                              )}
+                            </p>
+                          </div>
+                          <p className="text-xs uppercase tracking-wide text-gray-400">
+                            {point.age == null
+                              ? "Age n/a"
+                              : hideValues
+                                ? `Age ${HIDDEN_VALUE}`
+                                : `Age ${point.age.toFixed(0)}`}
+                          </p>
+                        </div>
+                        <p className="mt-3 text-lg font-semibold text-gray-900">
+                          {displayCurrency(point.totalBalance)}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {displayCurrency(point.accessibleBalance)} usable for
+                          FIRE
+                        </p>
+                        <p className="mt-1 text-sm text-green-700">
+                          {displayCurrency(point.estimatedMonthlyIncome)}/mo
+                          retirement income
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                  <details className="border-t border-gray-200 px-4 py-4">
+                    <summary className="cursor-pointer list-none text-sm font-semibold text-gray-900">
+                      Show projection math
+                    </summary>
+                    <p className="mt-3 text-sm text-gray-600">
+                      {displayInlineText(
+                        `Each row starts from the first drawdown checkpoint balance of ${formatCurrency(projectionStartTotal)}. The contribution, growth, and expense columns show change since the prior displayed checkpoint, while total, usable FIRE assets, and income remain absolute balances at that checkpoint. This table only shows the drawdown phase, when projected spending is actually being deducted.`,
+                      )}
+                    </p>
+                    <div className="mt-4 space-y-3 lg:hidden">
+                      {projectionMathRows.map((row) => (
+                        <article
+                          key={`detail-mobile-${row.point.month}`}
+                          className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">
+                                {row.point.age == null
+                                  ? "Age n/a"
+                                  : hideValues
+                                    ? `Age ${HIDDEN_VALUE}`
+                                    : `Age ${row.point.age.toFixed(0)}`}
+                              </p>
+                              <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
+                                {displayCurrency(row.point.totalBalance)} total
+                              </p>
+                            </div>
+                            <p className="text-sm font-semibold text-orange-700">
+                              {displayCurrency(
+                                row.point.estimatedMonthlyIncome,
+                              )}
+                              /mo
+                            </p>
+                          </div>
+                          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Liquid added
+                              </dt>
+                              <dd className="mt-1 font-medium text-gray-900">
+                                {displaySignedCurrency(row.liquidChange)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Retirement added
+                              </dt>
+                              <dd className="mt-1 font-medium text-gray-900">
+                                {displaySignedCurrency(row.retirementChange)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Growth
+                              </dt>
+                              <dd className="mt-1 font-medium text-gray-900">
+                                {displaySignedCurrency(row.growthChange)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Expenses
+                              </dt>
+                              <dd className="mt-1 font-medium text-gray-900">
+                                {displayNegativeCurrency(row.expenseChange)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                FIRE usable
+                              </dt>
+                              <dd className="mt-1 font-medium text-gray-900">
+                                {displayCurrency(row.point.accessibleBalance)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                                Calendar year
+                              </dt>
+                              <dd className="mt-1 font-medium text-gray-900">
+                                {displayCalendarYear(
+                                  getProjectionCalendarYear(
+                                    selectedSnapshot,
+                                    row.point.month,
+                                  ),
+                                )}
+                              </dd>
+                            </div>
+                          </dl>
+                        </article>
+                      ))}
+                    </div>
+                    <div className="mt-4 hidden max-h-[800px] overflow-auto rounded-xl border border-gray-200 lg:block">
+                      <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
+                          <tr>
+                            <th className="sticky left-0 top-0 z-20 bg-gray-50 px-4 py-3 font-medium">
+                              Age
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              Liquid Added
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              Retirement Added
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              Growth
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              Expenses
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              Total
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              FIRE Usable
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
+                              Income
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {projectionMathRows.map((row) => (
+                            <tr key={`detail-${row.point.month}`}>
+                              <td className="sticky left-0 z-10 bg-white px-4 py-3 text-gray-600">
+                                {row.point.age == null
+                                  ? "n/a"
+                                  : hideValues
+                                    ? HIDDEN_VALUE
+                                    : row.point.age.toFixed(0)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-900">
+                                {displaySignedCurrency(row.liquidChange)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-900">
+                                {displaySignedCurrency(row.retirementChange)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-900">
+                                {displaySignedCurrency(row.growthChange)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-900">
+                                {displayNegativeCurrency(row.expenseChange)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-900">
+                                {displayCurrency(row.point.totalBalance)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-900">
+                                {displayCurrency(row.point.accessibleBalance)}
+                              </td>
+                              <td className="px-4 py-3 text-orange-700">
+                                {displayCurrency(
+                                  row.point.estimatedMonthlyIncome,
+                                )}
+                                /mo
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </>
+              ) : (
+                <div className="p-4 text-sm text-gray-600">
+                  {projectionDeadlineAge != null
+                    ? displayInlineText(
+                        `FIRE is not reached before age ${projectionDeadlineAge}, so there are no retirement-phase checkpoints to show.`,
+                      )
+                    : "FIRE is not reached within the current projection horizon, so there are no retirement-phase checkpoints to show."}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+});
+
 export default function FireTracker({
   hideValues,
   fireSettings,
@@ -291,26 +1410,6 @@ export default function FireTracker({
     useState(false);
   const [draftFireSettings, setDraftFireSettings] =
     useState<FireSettings>(fireSettings);
-  const [draftTimeToFireSettings, setDraftTimeToFireSettings] = useState<
-    Pick<
-      FireSettings,
-      | "timeToFireAlgorithm"
-      | "annualBonusAmount"
-      | "nonRecurringBonusAmount"
-      | "jobLossMonthlySavingsReduction"
-      | "annualBonusMonthAdded"
-      | "nonRecurringBonusMonthAdded"
-    >
-  >({
-    timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
-    annualBonusAmount: fireSettings.annualBonusAmount,
-    nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
-    jobLossMonthlySavingsReduction: fireSettings.jobLossMonthlySavingsReduction,
-    annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
-    nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
-  });
-
-  useBodyScrollLock(showTimeToFireSettingsModal);
 
   useEffect(() => {
     if (!showStalePopover) return;
@@ -328,81 +1427,98 @@ export default function FireTracker({
 
   useEffect(() => {
     setDraftFireSettings(fireSettings);
-    setDraftTimeToFireSettings({
-      timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
-      annualBonusAmount: fireSettings.annualBonusAmount,
-      nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
-      jobLossMonthlySavingsReduction:
-        fireSettings.jobLossMonthlySavingsReduction,
-      annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
-      nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
-    });
   }, [fireSettings]);
   const savingsLookbackMonths = getFireCalculationLookbackMonths();
-  const orderedSnapshots = [...snapshots].sort(compareSnapshotsDesc);
-  const selectedSnapshotIndex = orderedSnapshots.findIndex(
-    (snapshot) =>
-      snapshot.year === selectedSnapshot?.year &&
-      snapshot.monthIndex === selectedSnapshot?.monthIndex,
+  const orderedSnapshots = useMemo(
+    () => [...snapshots].sort(compareSnapshotsDesc),
+    [snapshots],
   );
-  const priorSnapshotsForAverage =
-    selectedSnapshot != null && selectedSnapshotIndex >= 0
-      ? orderedSnapshots.slice(
-          selectedSnapshotIndex + 1,
-          selectedSnapshotIndex + 1 + savingsLookbackMonths,
-        )
+  const {
+    hasEnoughSavingsHistory,
+    projection,
+    currentAge,
+    selectedMonthLabel,
+    oldestSavingsSnapshot,
+    missingSavingsHistoryCount,
+    ttmRangeLabel,
+    ttmWindowEndOrdinal,
+    ttmWindowStartOrdinal,
+  } = useMemo(() => {
+    const selectedSnapshotIndex = orderedSnapshots.findIndex(
+      (snapshot) =>
+        snapshot.year === selectedSnapshot?.year &&
+        snapshot.monthIndex === selectedSnapshot?.monthIndex,
+    );
+    const nextPriorSnapshots =
+      selectedSnapshot != null && selectedSnapshotIndex >= 0
+        ? orderedSnapshots.slice(
+            selectedSnapshotIndex + 1,
+            selectedSnapshotIndex + 1 + savingsLookbackMonths,
+          )
+        : [];
+    const nextHasEnoughSavingsHistory =
+      nextPriorSnapshots.length === savingsLookbackMonths;
+    const nextSavingsInferenceSnapshots = nextHasEnoughSavingsHistory
+      ? nextPriorSnapshots
       : [];
-  const hasEnoughSavingsHistory =
-    priorSnapshotsForAverage.length === savingsLookbackMonths;
-  const savingsInferenceSnapshots = hasEnoughSavingsHistory
-    ? priorSnapshotsForAverage
-    : [];
-  const projection = selectedSnapshot
-    ? calculateFireProjection(selectedSnapshot.total, fireSettings, {
-        currentSnapshot: selectedSnapshot,
-        previousSnapshots: savingsInferenceSnapshots,
-      })
-    : null;
-  const currentAge = getCurrentAgeFromDateOfBirth(fireSettings.dateOfBirth);
-  const fundedPercent = Math.max(0, (projection?.fundedRatio ?? 0) * 100);
-  const progressBar = getProgressBarConfig(fundedPercent);
-  const retirementProjection = projection?.retirementProjection ?? null;
-  const projectionDeadlineAge = fireSettings.predictedDeathAge;
+    const nextProjection = selectedSnapshot
+      ? calculateFireProjection(selectedSnapshot.total, fireSettings, {
+          currentSnapshot: selectedSnapshot,
+          previousSnapshots: nextSavingsInferenceSnapshots,
+        })
+      : null;
+    const nextCurrentAge = getCurrentAgeFromDateOfBirth(
+      fireSettings.dateOfBirth,
+    );
+    const nextSelectedMonthLabel = selectedSnapshot
+      ? formatMonthPeriod(selectedSnapshot.year, selectedSnapshot.monthIndex)
+      : "No snapshot yet";
+    const nextOldestSavingsSnapshot =
+      nextSavingsInferenceSnapshots[nextSavingsInferenceSnapshots.length - 1] ??
+      null;
+    const nextOldestAvailableSnapshot =
+      orderedSnapshots[orderedSnapshots.length - 1] ?? null;
+    const nextMissingSavingsHistoryCount = Math.max(
+      savingsLookbackMonths - nextPriorSnapshots.length,
+      0,
+    );
+    const ttmRangeStartLabel = nextOldestSavingsSnapshot
+      ? formatMonthPeriod(
+          nextOldestSavingsSnapshot.year,
+          nextOldestSavingsSnapshot.monthIndex,
+        )
+      : nextOldestAvailableSnapshot
+        ? formatMonthPeriod(
+            nextOldestAvailableSnapshot.year,
+            nextOldestAvailableSnapshot.monthIndex,
+          )
+        : null;
+    const nextTtmRangeLabel =
+      ttmRangeStartLabel && selectedSnapshot
+        ? `${ttmRangeStartLabel} to ${nextSelectedMonthLabel}`
+        : selectedSnapshot
+          ? `the trailing 12 months ending ${nextSelectedMonthLabel}`
+          : "the trailing 12-month range";
+    const nextTtmWindowEndOrdinal = selectedSnapshot
+      ? selectedSnapshot.year * 12 + selectedSnapshot.monthIndex
+      : null;
+    const nextTtmWindowStartOrdinal =
+      nextTtmWindowEndOrdinal != null ? nextTtmWindowEndOrdinal - 11 : null;
+
+    return {
+      hasEnoughSavingsHistory: nextHasEnoughSavingsHistory,
+      projection: nextProjection,
+      currentAge: nextCurrentAge,
+      selectedMonthLabel: nextSelectedMonthLabel,
+      oldestSavingsSnapshot: nextOldestSavingsSnapshot,
+      missingSavingsHistoryCount: nextMissingSavingsHistoryCount,
+      ttmRangeLabel: nextTtmRangeLabel,
+      ttmWindowEndOrdinal: nextTtmWindowEndOrdinal,
+      ttmWindowStartOrdinal: nextTtmWindowStartOrdinal,
+    };
+  }, [fireSettings, orderedSnapshots, savingsLookbackMonths, selectedSnapshot]);
   const isShowingPreviousMonth =
     snapshotPreference === "previous" && previousSnapshot != null;
-  const selectedMonthLabel = selectedSnapshot
-    ? formatMonthPeriod(selectedSnapshot.year, selectedSnapshot.monthIndex)
-    : "No snapshot yet";
-  const oldestSavingsSnapshot =
-    savingsInferenceSnapshots[savingsInferenceSnapshots.length - 1] ?? null;
-  const oldestAvailableSnapshot =
-    orderedSnapshots[orderedSnapshots.length - 1] ?? null;
-  const missingSavingsHistoryCount = Math.max(
-    savingsLookbackMonths - priorSnapshotsForAverage.length,
-    0,
-  );
-  const ttmRangeStartLabel = oldestSavingsSnapshot
-    ? formatMonthPeriod(
-        oldestSavingsSnapshot.year,
-        oldestSavingsSnapshot.monthIndex,
-      )
-    : oldestAvailableSnapshot
-      ? formatMonthPeriod(
-          oldestAvailableSnapshot.year,
-          oldestAvailableSnapshot.monthIndex,
-        )
-      : null;
-  const ttmRangeLabel =
-    ttmRangeStartLabel && selectedSnapshot
-      ? `${ttmRangeStartLabel} to ${selectedMonthLabel}`
-      : selectedSnapshot
-        ? `the trailing 12 months ending ${selectedMonthLabel}`
-        : "the trailing 12-month range";
-  const ttmWindowEndOrdinal = selectedSnapshot
-    ? selectedSnapshot.year * 12 + selectedSnapshot.monthIndex
-    : null;
-  const ttmWindowStartOrdinal =
-    ttmWindowEndOrdinal != null ? ttmWindowEndOrdinal - 11 : null;
   const isAnnualBonusMonthStale =
     fireSettings.annualBonusAmount > 0 &&
     isBonusMonthOutsideTtmWindow(
@@ -417,80 +1533,9 @@ export default function FireTracker({
       ttmWindowStartOrdinal,
       ttmWindowEndOrdinal,
     );
-  const isDraftAnnualBonusMonthStale =
-    draftTimeToFireSettings.annualBonusAmount > 0 &&
-    isBonusMonthOutsideTtmWindow(
-      draftTimeToFireSettings.annualBonusMonthAdded,
-      ttmWindowStartOrdinal,
-      ttmWindowEndOrdinal,
-    );
-  const isDraftNonRecurringBonusMonthStale =
-    draftTimeToFireSettings.nonRecurringBonusAmount > 0 &&
-    isBonusMonthOutsideTtmWindow(
-      draftTimeToFireSettings.nonRecurringBonusMonthAdded,
-      ttmWindowStartOrdinal,
-      ttmWindowEndOrdinal,
-    );
-  const targetAgeSummary =
-    projection?.targetYearsAway == null
-      ? "Add your date of birth and target FIRE age in settings."
-      : projection.requiredMonthlyContribution == null
-        ? "Target age requires a savings level outside the planner range."
-        : projection.requiredMonthlyContribution <=
-            (projection.currentMonthlyContribution ?? 0)
-          ? `On track for age ${fireSettings.targetFireAge}.`
-          : `${formatCurrency(projection.requiredMonthlyContribution)} per month needed to reach age ${fireSettings.targetFireAge}.`;
-  const targetAgeMathSummary =
-    projection?.requiredMonthlyContribution == null
-      ? null
-      : `This estimate includes growth on today's balances and monthly savings${retirementProjection ? ", plus retirement balances that become usable by your target age" : ""}.`;
-  const contributionSummary =
-    !selectedSnapshot ||
-    !hasEnoughSavingsHistory ||
-    projection?.currentMonthlyContribution == null
-      ? `Add ${missingSavingsHistoryCount} earlier net worth ${missingSavingsHistoryCount === 1 ? "month" : "months"} to calculate your trailing 12-month liquid savings rate.`
-      : fireSettings.annualBonusAmount > 0 ||
-          fireSettings.nonRecurringBonusAmount > 0
-        ? (() => {
-            const parts: string[] = [];
-            if (fireSettings.annualBonusAmount > 0) {
-              parts.push(
-                `removing ${formatCurrency(fireSettings.annualBonusAmount)} recurring annual inflow (normalized to ${formatMonthlyEquivalentFromOneOff(fireSettings.annualBonusAmount)}/mo)`,
-              );
-            }
-            if (fireSettings.nonRecurringBonusAmount > 0) {
-              parts.push(
-                `removing ${formatCurrency(fireSettings.nonRecurringBonusAmount)} non-recurring amount entirely`,
-              );
-            }
-            return `${formatCurrency(projection.currentMonthlyContribution)} per month from TTM (${ttmRangeLabel}) after ${parts.join(" and ")}.`;
-          })()
-        : `${formatCurrency(projection.currentMonthlyContribution)} per month averaged across trailing 12 months from ${formatMonthPeriod(oldestSavingsSnapshot.year, oldestSavingsSnapshot.monthIndex)} to ${selectedMonthLabel}.`;
-  const timeToFireValue =
-    selectedSnapshot &&
-    hasEnoughSavingsHistory &&
-    projection?.currentMonthlyContribution != null
-      ? projection.yearsToFire == null && projectionDeadlineAge != null
-        ? `Not by age ${projectionDeadlineAge}`
-        : formatYears(projection.yearsToFire)
-      : "- years";
-  const jobLossSummary =
-    fireSettings.jobLossMonthlySavingsReduction <= 0
-      ? null
-      : projection?.jobLossMonthlyContribution == null
-        ? "Add enough trailing net worth history before using the job-loss delay estimate."
-        : projection.jobLossExceedsProjectionHorizon
-          ? `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)}, ongoing savings fall to ${formatCurrency(projection.jobLossMonthlyContribution)} per month and your target FIRE timing is delayed by ${projection.jobLossDelayIsLowerBound ? `at least ${formatDelayFromMonths(projection.jobLossDelayMonths)}` : formatDelayFromMonths(projection.jobLossDelayMonths)}, pushing it beyond the current projection horizon.`
-          : projection.jobLossMonthsToFire == null
-            ? `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)}, this plan does not reach FIRE within the current projection horizon.`
-            : `If monthly savings drop by ${formatCurrency(fireSettings.jobLossMonthlySavingsReduction)}, ongoing savings fall to ${formatCurrency(projection.jobLossMonthlyContribution)} per month and your target FIRE timing is delayed by ${formatDelayFromMonths(projection.jobLossDelayMonths)} to ${formatYears(projection.jobLossYearsToFire)}.`;
-  const showJobLossCard = fireSettings.jobLossMonthlySavingsReduction > 0;
-  const jobLossCardValue =
-    projection?.jobLossMonthlyContribution == null
-      ? "Need history"
-      : projection.jobLossDelayIsLowerBound
-        ? `>= ${formatDelayFromMonths(projection.jobLossDelayMonths)}`
-        : formatDelayFromMonths(projection.jobLossDelayMonths);
+  const jobLossDurationSummary = formatMonthCount(
+    fireSettings.jobLossMonthlySavingsReductionMonths,
+  );
   const configuredRetirementSystem = fireSettings.retirementSystem;
   const latestConfiguredBalancePeriod = getLatestRetirementBalancePeriod(
     configuredRetirementSystem,
@@ -564,149 +1609,6 @@ export default function FireTracker({
   ).size;
   const configuredAccountCount =
     configuredRetirementSystem?.accounts.length ?? 0;
-  const displayCurrency = (value: number): string =>
-    maskDisplayValue(formatCurrency(value), hideValues);
-  const displayNegativeCurrency = (value: number): string =>
-    maskDisplayValue(formatNegativeCurrency(value), hideValues);
-  const displaySignedCurrency = (value: number): string =>
-    maskDisplayValue(formatSignedCurrency(value), hideValues);
-  const displayPercent = (value: number): string =>
-    maskDisplayValue(formatPercent(value), hideValues);
-  const displayAge = (value: number | null): string =>
-    maskDisplayValue(formatAge(value), hideValues);
-  const displayMemberIncome = (member: RetirementMemberProjection): string =>
-    hideValues ? HIDDEN_VALUE : formatMemberIncome(member);
-  const displayInlineText = (text: string): string =>
-    maskInlineNumbers(text, hideValues);
-  const displayCalendarYear = (year: number): string =>
-    hideValues ? HIDDEN_VALUE : String(year);
-
-  const cards: SummaryCard[] = [
-    {
-      label: "FIRE Number",
-      value: displayCurrency(projection?.fireNumber ?? 0),
-      helper: displayInlineText(
-        `${formatCurrency(fireSettings.annualSpendingGoal)} spending at ${formatPercent(fireSettings.withdrawalRate)}`,
-      ),
-      icon: Flame,
-      accent: "from-amber-500/20 to-red-500/10 text-orange-700",
-    },
-    {
-      label: "Current Progress",
-      value: displayPercent(fundedPercent),
-      helper: displayInlineText(
-        `${formatCurrency(projection?.gapToGoal ?? 0)} still to go from ${formatCurrency(projection?.accessibleNetWorth ?? 0)} accessible today`,
-      ),
-      icon: Landmark,
-      accent: "from-orange-500/15 to-red-500/10 text-red-700",
-      progressBar,
-    },
-    {
-      label: "Time To FIRE",
-      value: maskDisplayValue(timeToFireValue, hideValues),
-      helper: displayInlineText(
-        `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
-      ),
-      icon: TrendingUp,
-      accent: "from-orange-400/20 to-amber-500/10 text-orange-700",
-      hasSettingsButton: true,
-    },
-    ...(showJobLossCard
-      ? [
-          {
-            label: "Job-Loss FIRE Delay",
-            value: maskDisplayValue(jobLossCardValue, hideValues),
-            helper: displayInlineText(
-              jobLossSummary ??
-                "Add enough trailing net worth history before using the job-loss delay estimate.",
-            ),
-            icon: AlertTriangle,
-            accent: "from-amber-500/20 to-orange-500/10 text-amber-700",
-          },
-        ]
-      : []),
-    {
-      label: `Monthly Savings to retire by ${fireSettings.targetFireAge}`,
-      value:
-        projection?.requiredMonthlyContribution == null
-          ? "Set age target"
-          : displayCurrency(projection.requiredMonthlyContribution),
-      helper: displayInlineText(
-        currentAge == null
-          ? [targetAgeSummary, targetAgeMathSummary].filter(Boolean).join(" ")
-          : [
-              targetAgeSummary,
-              `Current age: ${currentAge}.`,
-              targetAgeMathSummary,
-            ]
-              .filter(Boolean)
-              .join(" "),
-      ),
-      icon: Goal,
-      accent: "from-red-500/20 to-orange-500/10 text-red-700",
-    },
-  ];
-  const liquidityCards = retirementProjection
-    ? [
-        {
-          label: "Liquid",
-          value: displayCurrency(retirementProjection.breakdown.liquid),
-        },
-        {
-          label: "Semi-liquid",
-          value: displayCurrency(retirementProjection.breakdown.semiLiquid),
-        },
-        {
-          label: "Locked",
-          value: displayCurrency(retirementProjection.breakdown.locked),
-        },
-        {
-          label: "Restricted",
-          value: displayCurrency(retirementProjection.breakdown.restricted),
-        },
-      ]
-    : [];
-  const fireProjectionStartMonth = getDrawdownStartMonth(
-    currentAge,
-    fireSettings.targetFireAge,
-    retirementProjection?.monthsToFire ?? null,
-  );
-  const visibleProjection =
-    retirementProjection == null || fireProjectionStartMonth == null
-      ? []
-      : retirementProjection.projection.filter(
-          (point) => point.month >= fireProjectionStartMonth,
-        );
-  const projectionMathRows = visibleProjection.map((point, index) => {
-    const previousPoint = visibleProjection[index - 1];
-
-    return {
-      point,
-      liquidChange:
-        previousPoint == null
-          ? 0
-          : point.cumulativeLiquidContributions -
-            previousPoint.cumulativeLiquidContributions,
-      retirementChange:
-        previousPoint == null
-          ? 0
-          : point.cumulativeRetirementContributions -
-            previousPoint.cumulativeRetirementContributions,
-      growthChange:
-        previousPoint == null
-          ? 0
-          : point.cumulativeInvestmentGrowth -
-            previousPoint.cumulativeInvestmentGrowth,
-      expenseChange:
-        previousPoint == null
-          ? 0
-          : point.cumulativeProjectedSpending -
-            previousPoint.cumulativeProjectedSpending,
-    };
-  });
-  const projectionHighlights = visibleProjection.slice(0, 6);
-  const latestRetirementBalancePeriod = retirementProjection?.balancePeriod;
-  const projectionStartTotal = projectionHighlights[0]?.totalBalance ?? 0;
   const showProjectionView = activeView === "display";
 
   const handleSaveFireSettings = () => {
@@ -714,31 +1616,21 @@ export default function FireTracker({
   };
 
   const handleOpenTimeToFireSettings = () => {
-    setDraftTimeToFireSettings({
-      timeToFireAlgorithm: fireSettings.timeToFireAlgorithm,
-      annualBonusAmount: fireSettings.annualBonusAmount,
-      nonRecurringBonusAmount: fireSettings.nonRecurringBonusAmount,
-      jobLossMonthlySavingsReduction:
-        fireSettings.jobLossMonthlySavingsReduction,
-      annualBonusMonthAdded: fireSettings.annualBonusMonthAdded,
-      nonRecurringBonusMonthAdded: fireSettings.nonRecurringBonusMonthAdded,
-    });
     setShowTimeToFireSettingsModal(true);
   };
 
-  const handleSaveTimeToFireSettings = () => {
+  const handleSaveTimeToFireSettings = (draft: TimeToFireSettingsDraft) => {
     onUpdateFireSettings(
       sanitizeFireSettings({
         ...fireSettings,
-        timeToFireAlgorithm: draftTimeToFireSettings.timeToFireAlgorithm,
-        annualBonusAmount: draftTimeToFireSettings.annualBonusAmount,
-        nonRecurringBonusAmount:
-          draftTimeToFireSettings.nonRecurringBonusAmount,
-        jobLossMonthlySavingsReduction:
-          draftTimeToFireSettings.jobLossMonthlySavingsReduction,
-        annualBonusMonthAdded: draftTimeToFireSettings.annualBonusMonthAdded,
-        nonRecurringBonusMonthAdded:
-          draftTimeToFireSettings.nonRecurringBonusMonthAdded,
+        timeToFireAlgorithm: draft.timeToFireAlgorithm,
+        annualBonusAmount: draft.annualBonusAmount,
+        nonRecurringBonusAmount: draft.nonRecurringBonusAmount,
+        jobLossMonthlySavingsReduction: draft.jobLossMonthlySavingsReduction,
+        jobLossMonthlySavingsReductionMonths:
+          draft.jobLossMonthlySavingsReductionMonths,
+        annualBonusMonthAdded: draft.annualBonusMonthAdded,
+        nonRecurringBonusMonthAdded: draft.nonRecurringBonusMonthAdded,
       }),
     );
     setShowTimeToFireSettingsModal(false);
@@ -1105,6 +1997,9 @@ export default function FireTracker({
                           : formatCurrency(
                               fireSettings.jobLossMonthlySavingsReduction,
                             )}
+                        {fireSettings.jobLossMonthlySavingsReduction > 0
+                          ? ` for ${jobLossDurationSummary}`
+                          : ""}
                         .
                       </p>
                       {isAnnualBonusMonthStale ||
@@ -1208,806 +2103,33 @@ export default function FireTracker({
             </div>
           </div>
         ) : (
-          <>
-            <div className="mb-3">
-              <button
-                type="button"
-                onClick={handleOpenTimeToFireSettings}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
-              >
-                <Settings size={15} />
-                Time to FIRE Settings
-              </button>
-            </div>
-            <div
-              className={`grid gap-4 md:grid-cols-2 ${showJobLossCard ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}
-            >
-              {cards.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <article
-                    key={card.label}
-                    className="rounded-2xl border border-gray-200 bg-white p-4"
-                  >
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {card.label}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-gray-900">
-                          {card.value}
-                        </p>
-                      </div>
-                      <div
-                        className={`rounded-2xl bg-gradient-to-br p-3 ${card.accent}`}
-                      >
-                        <Icon size={18} />
-                      </div>
-                    </div>
-                    <p className="text-sm leading-6 text-gray-500">
-                      {card.helper}
-                    </p>
-                    {card.progressBar ? (
-                      <div className="mt-4">
-                        <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r transition-all duration-500 ${card.progressBar.fillClassName}`}
-                            style={{
-                              width: `${card.progressBar.fillPercent}%`,
-                            }}
-                          />
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                          <span className={card.progressBar.labelClassName}>
-                            {card.progressBar.label}
-                          </span>
-                          <span>
-                            {formatPercent(card.progressBar.fillPercent)}
-                          </span>
-                        </div>
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-              Gross net worth is {displayCurrency(projection.grossNetWorth)}{" "}
-              from your selected recorded net worth. FIRE progress uses{" "}
-              {displayCurrency(projection.accessibleNetWorth)} after excluding
-              retirement balances that are not yet available under the
-              configured withdrawal rules.
-            </div>
-
-            {snapshotPreference === "previous" && !previousSnapshot ? (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Previous-month FIRE view is saved as your preference, but there
-                is no earlier recorded month yet, so the tracker is using{" "}
-                {hideValues ? HIDDEN_VALUE : selectedMonthLabel}.
-              </div>
-            ) : null}
-
-            {!hasEnoughSavingsHistory ? (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {missingSavingsHistoryCount > 0
-                  ? `The time-to-FIRE widget uses a trailing 12-month calculation, but there is not enough earlier history yet. Add ${missingSavingsHistoryCount} more recorded ${missingSavingsHistoryCount === 1 ? "month" : "months"} to use it.`
-                  : "Not enough history is available to calculate the trailing 12-month savings rate."}
-              </div>
-            ) : null}
-
-            {retirementProjection ? (
-              <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold text-gray-900">
-                        Retirement System
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-600">
-                        {fireSettings.retirementSystem?.name ??
-                          "Configured system"}
-                      </p>
-                      {latestRetirementBalancePeriod ? (
-                        <p className="mt-1 text-xs text-gray-500">
-                          Latest balances from{" "}
-                          {formatMonthPeriod(
-                            latestRetirementBalancePeriod.year,
-                            latestRetirementBalancePeriod.monthIndex,
-                          )}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="w-full rounded-2xl bg-white px-3 py-2 text-left shadow-sm sm:w-auto sm:text-right">
-                      <p className="text-xs uppercase tracking-wide text-gray-400">
-                        Est. income
-                      </p>
-                      <p className="text-sm font-semibold text-green-700">
-                        {displayCurrency(
-                          retirementProjection.estimatedMonthlyRetirementIncome,
-                        )}
-                        /mo
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                    {liquidityCards.map((card) => (
-                      <div
-                        key={card.label}
-                        className="rounded-2xl border border-orange-100 bg-white px-4 py-3"
-                      >
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                          {card.label}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {card.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm text-gray-600">
-                    Payout phase starts at age{" "}
-                    {hideValues
-                      ? HIDDEN_VALUE
-                      : (retirementProjection.payoutStartAge ?? "n/a")}
-                    . Restricted balances stay excluded from usable FIRE assets.
-                    {displayInlineText(
-                      `${fireSettings.preFireAnnualSpending > 0 ? ` Pre-FIRE spending is estimated at ${formatCurrency(fireSettings.preFireAnnualSpending)} per year.` : ""}${fireSettings.annualSpendingGoal > 0 ? ` Projected spending of ${formatCurrency(fireSettings.annualSpendingGoal)} per year is deducted during drawdown.` : ""}${fireSettings.retirementContributionStopAge != null ? ` Retirement contributions stop at age ${fireSettings.retirementContributionStopAge}.` : ""}${projectionDeadlineAge != null ? ` Projection horizon ends at age ${projectionDeadlineAge}.` : ""}`,
-                    )}
-                  </div>
-                </section>
-
-                <div className="space-y-6">
-                  {retirementProjection.memberProjections.length > 0 ? (
-                    <section className="rounded-2xl border border-gray-200 bg-white">
-                      <div className="border-b border-gray-200 px-4 py-3">
-                        <h3 className="text-base font-semibold text-gray-900">
-                          Member CPF Summary
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Individual retirement balances are tracked separately
-                          and then rolled up into household FIRE progress.
-                        </p>
-                      </div>
-                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {retirementProjection.memberProjections.map(
-                          (member) => (
-                            <article
-                              key={member.id}
-                              className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
-                            >
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                  <p className="font-semibold text-gray-900">
-                                    {member.name}
-                                  </p>
-                                  <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                    Age {displayAge(member.currentAge)} · Income{" "}
-                                    {displayMemberIncome(member)}/mo
-                                  </p>
-                                </div>
-                                <div className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-left sm:w-auto sm:text-right">
-                                  <p className="text-xs uppercase tracking-wide text-gray-400">
-                                    Income
-                                  </p>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    {displayMemberIncome(member)}/mo
-                                  </p>
-                                </div>
-                              </div>
-                              <p className="mt-4 text-lg font-semibold text-gray-900">
-                                {displayCurrency(member.currentBalance)}
-                              </p>
-                              <p className="mt-1 text-sm text-gray-600">
-                                Current retirement balance
-                              </p>
-                              <p className="mt-3 text-sm text-gray-600">
-                                {displayInlineText(
-                                  `${formatCurrency(member.projectedBalance)} at end of timeline · ${formatCurrency(member.estimatedMonthlyIncome)}/mo income`,
-                                )}
-                              </p>
-                            </article>
-                          ),
-                        )}
-                      </div>
-                    </section>
-                  ) : null}
-
-                  <section className="rounded-2xl border border-gray-200 bg-white">
-                    <div className="border-b border-gray-200 px-4 py-3">
-                      <h3 className="text-base font-semibold text-gray-900">
-                        Account Balances
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Current balances, payout-eligible balances, and
-                        long-range projections by configured account.
-                      </p>
-                    </div>
-                    <div className="space-y-3 p-4 md:hidden">
-                      {retirementProjection.accountProjections.map(
-                        (account) => (
-                          <article
-                            key={account.id}
-                            className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
-                          >
-                            <div className="flex flex-col gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">
-                                  {account.name}
-                                </p>
-                                <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                  {account.memberName ?? "Household"} ·{" "}
-                                  {formatClassification(account.classification)}
-                                </p>
-                                <p className="mt-2 text-xs text-gray-500">
-                                  {displayInlineText(
-                                    `${formatPercent(account.annualReturnRate)} return${account.minimumWithdrawalAge != null ? ` · age ${account.minimumWithdrawalAge}+` : ""}`,
-                                  )}
-                                </p>
-                              </div>
-                              <dl className="grid grid-cols-2 gap-3 text-sm">
-                                <div>
-                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                    Current
-                                  </dt>
-                                  <dd className="mt-1 font-semibold text-gray-900">
-                                    {displayCurrency(account.currentBalance)}
-                                  </dd>
-                                </div>
-                                <div>
-                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                    At payout
-                                  </dt>
-                                  <dd className="mt-1 font-semibold text-gray-900">
-                                    {account.projectedBalanceAtPayout == null
-                                      ? "n/a"
-                                      : displayCurrency(
-                                          account.projectedBalanceAtPayout,
-                                        )}
-                                  </dd>
-                                </div>
-                                <div>
-                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                    End timeline
-                                  </dt>
-                                  <dd className="mt-1 font-semibold text-gray-900">
-                                    {displayCurrency(account.projectedBalance)}
-                                  </dd>
-                                </div>
-                                <div>
-                                  <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                    Income
-                                  </dt>
-                                  <dd className="mt-1 font-semibold text-green-700">
-                                    {account.estimatedMonthlyIncome > 0
-                                      ? `${displayCurrency(account.estimatedMonthlyIncome)}/mo`
-                                      : "n/a"}
-                                  </dd>
-                                </div>
-                              </dl>
-                            </div>
-                          </article>
-                        ),
-                      )}
-                    </div>
-                    <div className="hidden overflow-x-auto md:block">
-                      <table className="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
-                          <tr>
-                            <th className="px-4 py-3 font-medium">Member</th>
-                            <th className="px-4 py-3 font-medium">Account</th>
-                            <th className="px-4 py-3 font-medium">Class</th>
-                            <th className="px-4 py-3 font-medium">Current</th>
-                            <th className="px-4 py-3 font-medium">At Payout</th>
-                            <th className="px-4 py-3 font-medium">
-                              End Timeline
-                            </th>
-                            <th className="px-4 py-3 font-medium">Income</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white">
-                          {retirementProjection.accountProjections.map(
-                            (account) => (
-                              <tr key={account.id}>
-                                <td className="px-4 py-3 text-gray-600">
-                                  {account.memberName ?? "Household"}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div>
-                                    <p className="font-medium text-gray-900">
-                                      {account.name}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {displayInlineText(
-                                        `${formatPercent(account.annualReturnRate)} return${account.minimumWithdrawalAge != null ? ` · age ${account.minimumWithdrawalAge}+` : ""}`,
-                                      )}
-                                    </p>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-gray-600">
-                                  {formatClassification(account.classification)}
-                                </td>
-                                <td className="px-4 py-3 text-gray-900">
-                                  {displayCurrency(account.currentBalance)}
-                                </td>
-                                <td className="px-4 py-3 text-gray-900">
-                                  {account.projectedBalanceAtPayout == null
-                                    ? "n/a"
-                                    : displayCurrency(
-                                        account.projectedBalanceAtPayout,
-                                      )}
-                                </td>
-                                <td className="px-4 py-3 text-gray-900">
-                                  {displayCurrency(account.projectedBalance)}
-                                </td>
-                                <td className="px-4 py-3 text-green-700">
-                                  {account.estimatedMonthlyIncome > 0
-                                    ? `${displayCurrency(account.estimatedMonthlyIncome)}/mo`
-                                    : "n/a"}
-                                </td>
-                              </tr>
-                            ),
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-
-                  <section className="rounded-2xl border border-gray-200 bg-white">
-                    <div className="border-b border-gray-200 px-4 py-3">
-                      <h3 className="text-base font-semibold text-gray-900">
-                        Projection Timeline
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {projectionDeadlineAge != null
-                          ? displayInlineText(
-                              `Retirement-phase checkpoints from the FIRE year through age ${projectionDeadlineAge}.`,
-                            )
-                          : "Retirement-phase checkpoints starting from the FIRE year."}
-                      </p>
-                    </div>
-                    {projectionHighlights.length > 0 && selectedSnapshot ? (
-                      <>
-                        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                          {projectionHighlights.map((point, index) => (
-                            <article
-                              key={point.month}
-                              className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
-                            >
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    {index === 0
-                                      ? "FIRE year"
-                                      : hideValues
-                                        ? HIDDEN_VALUE
-                                        : `+${point.yearOffset - projectionHighlights[0].yearOffset} yr`}
-                                  </p>
-                                  <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                    {displayCalendarYear(
-                                      getProjectionCalendarYear(
-                                        selectedSnapshot,
-                                        point.month,
-                                      ),
-                                    )}
-                                  </p>
-                                </div>
-                                <p className="text-xs uppercase tracking-wide text-gray-400">
-                                  {point.age == null
-                                    ? "Age n/a"
-                                    : hideValues
-                                      ? `Age ${HIDDEN_VALUE}`
-                                      : `Age ${point.age.toFixed(0)}`}
-                                </p>
-                              </div>
-                              <p className="mt-3 text-lg font-semibold text-gray-900">
-                                {displayCurrency(point.totalBalance)}
-                              </p>
-                              <p className="mt-1 text-sm text-gray-600">
-                                {displayCurrency(point.accessibleBalance)}{" "}
-                                usable for FIRE
-                              </p>
-                              <p className="mt-1 text-sm text-green-700">
-                                {displayCurrency(point.estimatedMonthlyIncome)}
-                                /mo retirement income
-                              </p>
-                            </article>
-                          ))}
-                        </div>
-                        <details className="border-t border-gray-200 px-4 py-4">
-                          <summary className="cursor-pointer list-none text-sm font-semibold text-gray-900">
-                            Show projection math
-                          </summary>
-                          <p className="mt-3 text-sm text-gray-600">
-                            {displayInlineText(
-                              `Each row starts from the first drawdown checkpoint balance of ${formatCurrency(projectionStartTotal)}. The contribution, growth, and expense columns show change since the prior displayed checkpoint, while total, usable FIRE assets, and income remain absolute balances at that checkpoint. This table only shows the drawdown phase, when projected spending is actually being deducted.`,
-                            )}
-                          </p>
-                          <div className="mt-4 space-y-3 lg:hidden">
-                            {projectionMathRows.map((row) => (
-                              <article
-                                key={`detail-mobile-${row.point.month}`}
-                                className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-semibold text-gray-900">
-                                      {row.point.age == null
-                                        ? "Age n/a"
-                                        : hideValues
-                                          ? `Age ${HIDDEN_VALUE}`
-                                          : `Age ${row.point.age.toFixed(0)}`}
-                                    </p>
-                                    <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">
-                                      {displayCurrency(row.point.totalBalance)}{" "}
-                                      total
-                                    </p>
-                                  </div>
-                                  <p className="text-sm font-semibold text-orange-700">
-                                    {displayCurrency(
-                                      row.point.estimatedMonthlyIncome,
-                                    )}
-                                    /mo
-                                  </p>
-                                </div>
-                                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                                  <div>
-                                    <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                      Liquid added
-                                    </dt>
-                                    <dd className="mt-1 font-medium text-gray-900">
-                                      {displaySignedCurrency(row.liquidChange)}
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                      Retirement added
-                                    </dt>
-                                    <dd className="mt-1 font-medium text-gray-900">
-                                      {displaySignedCurrency(
-                                        row.retirementChange,
-                                      )}
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                      Growth
-                                    </dt>
-                                    <dd className="mt-1 font-medium text-gray-900">
-                                      {displaySignedCurrency(row.growthChange)}
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                      Expenses
-                                    </dt>
-                                    <dd className="mt-1 font-medium text-gray-900">
-                                      {displayNegativeCurrency(
-                                        row.expenseChange,
-                                      )}
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                      FIRE usable
-                                    </dt>
-                                    <dd className="mt-1 font-medium text-gray-900">
-                                      {displayCurrency(
-                                        row.point.accessibleBalance,
-                                      )}
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt className="text-xs uppercase tracking-wide text-gray-400">
-                                      Calendar year
-                                    </dt>
-                                    <dd className="mt-1 font-medium text-gray-900">
-                                      {displayCalendarYear(
-                                        getProjectionCalendarYear(
-                                          selectedSnapshot,
-                                          row.point.month,
-                                        ),
-                                      )}
-                                    </dd>
-                                  </div>
-                                </dl>
-                              </article>
-                            ))}
-                          </div>
-                          <div className="mt-4 hidden max-h-[800px] overflow-auto rounded-xl border border-gray-200 lg:block">
-                            <table className="min-w-full divide-y divide-gray-200 text-sm">
-                              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
-                                <tr>
-                                  <th className="sticky left-0 top-0 z-20 bg-gray-50 px-4 py-3 font-medium">
-                                    Age
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    Liquid Added
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    Retirement Added
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    Growth
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    Expenses
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    Total
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    FIRE Usable
-                                  </th>
-                                  <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 font-medium">
-                                    Income
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100 bg-white">
-                                {projectionMathRows.map((row) => (
-                                  <tr key={`detail-${row.point.month}`}>
-                                    <td className="sticky left-0 z-10 bg-white px-4 py-3 text-gray-600">
-                                      {row.point.age == null
-                                        ? "n/a"
-                                        : hideValues
-                                          ? HIDDEN_VALUE
-                                          : row.point.age.toFixed(0)}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">
-                                      {displaySignedCurrency(row.liquidChange)}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">
-                                      {displaySignedCurrency(
-                                        row.retirementChange,
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">
-                                      {displaySignedCurrency(row.growthChange)}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">
-                                      {displayNegativeCurrency(
-                                        row.expenseChange,
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">
-                                      {displayCurrency(row.point.totalBalance)}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">
-                                      {displayCurrency(
-                                        row.point.accessibleBalance,
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-orange-700">
-                                      {displayCurrency(
-                                        row.point.estimatedMonthlyIncome,
-                                      )}
-                                      /mo
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      </>
-                    ) : (
-                      <div className="p-4 text-sm text-gray-600">
-                        {projectionDeadlineAge != null
-                          ? displayInlineText(
-                              `FIRE is not reached before age ${projectionDeadlineAge}, so there are no retirement-phase checkpoints to show.`,
-                            )
-                          : "FIRE is not reached within the current projection horizon, so there are no retirement-phase checkpoints to show."}
-                      </div>
-                    )}
-                  </section>
-                </div>
-              </div>
-            ) : null}
-          </>
+          <FireTrackerProjectionView
+            hideValues={hideValues}
+            projection={projection}
+            fireSettings={fireSettings}
+            selectedSnapshot={selectedSnapshot}
+            previousSnapshot={previousSnapshot}
+            snapshotPreference={snapshotPreference}
+            selectedMonthLabel={selectedMonthLabel}
+            hasEnoughSavingsHistory={hasEnoughSavingsHistory}
+            missingSavingsHistoryCount={missingSavingsHistoryCount}
+            oldestSavingsSnapshot={oldestSavingsSnapshot}
+            ttmRangeLabel={ttmRangeLabel}
+            currentAge={currentAge}
+            onOpenTimeToFireSettings={setShowTimeToFireSettingsModal}
+          />
         )}
       </section>
 
       {showTimeToFireSettingsModal ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Time to FIRE Settings
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Choose how the widget infers savings and include annual bonus
-                  or one-off monthly amounts.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTimeToFireSettingsModal(false)}
-                className="text-gray-400 transition-colors hover:text-gray-600"
-                aria-label="Close Time to FIRE settings"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-medium text-gray-900">
-                  Calculation algorithm
-                </p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">
-                  TTM averages inferred savings across the last 12 recorded
-                  months before the selected snapshot.
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraftTimeToFireSettings((prev) => ({
-                      ...prev,
-                      timeToFireAlgorithm: "ttm",
-                    }))
-                  }
-                  className="mt-3 w-full rounded-2xl border border-orange-300 bg-orange-50 px-4 py-4 text-left shadow-sm"
-                >
-                  <span className="block text-sm font-semibold text-orange-800">
-                    Twelve trailing months (TTM)
-                  </span>
-                  <span className="mt-1 block text-xs text-orange-700/80">
-                    Uses the trailing 12 months of net worth history for the
-                    Time to FIRE calculation. The adjustment field below only
-                    applies to this TTM algorithm.
-                  </span>
-                </button>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                <span className="text-xs uppercase tracking-wide text-gray-400">
-                  <b>Recurring</b> annual bonus or large amount
-                </span>
-                <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Applies only to TTM. Removes this amount from the trailing
-                  window and adds back a normalized monthly equivalent (
-                  {ttmRangeLabel}).
-                </p>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={draftTimeToFireSettings.annualBonusAmount}
-                  onChange={(event) =>
-                    setDraftTimeToFireSettings((prev) => ({
-                      ...prev,
-                      annualBonusAmount: parseNumber(event.target.value),
-                    }))
-                  }
-                  className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-                <div className="mt-3">
-                  <label className="block text-xs text-gray-500">
-                    Month received
-                  </label>
-                  <input
-                    type="month"
-                    value={draftTimeToFireSettings.annualBonusMonthAdded ?? ""}
-                    onChange={(event) =>
-                      setDraftTimeToFireSettings((prev) => ({
-                        ...prev,
-                        annualBonusMonthAdded: event.target.value || null,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                  />
-                  {isDraftAnnualBonusMonthStale ? (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
-                      <AlertTriangle size={13} className="shrink-0" />
-                      This month is outside the current TTM window (
-                      {ttmRangeLabel}). Update or clear this setting.
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                <span className="text-xs uppercase tracking-wide text-gray-400">
-                  <b>Non-recurring</b> bonus or large amount
-                </span>
-                <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Applies only to TTM. Fully removes this one-time amount from
-                  the trailing window without adding anything back (
-                  {ttmRangeLabel}).
-                </p>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={draftTimeToFireSettings.nonRecurringBonusAmount}
-                  onChange={(event) =>
-                    setDraftTimeToFireSettings((prev) => ({
-                      ...prev,
-                      nonRecurringBonusAmount: parseNumber(event.target.value),
-                    }))
-                  }
-                  className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-                <div className="mt-3">
-                  <label className="block text-xs text-gray-500">
-                    Month received
-                  </label>
-                  <input
-                    type="month"
-                    value={
-                      draftTimeToFireSettings.nonRecurringBonusMonthAdded ?? ""
-                    }
-                    onChange={(event) =>
-                      setDraftTimeToFireSettings((prev) => ({
-                        ...prev,
-                        nonRecurringBonusMonthAdded: event.target.value || null,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                  />
-                  {isDraftNonRecurringBonusMonthStale ? (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
-                      <AlertTriangle size={13} className="shrink-0" />
-                      This month is outside the current TTM window (
-                      {ttmRangeLabel}). Update or clear this setting.
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                <span className="text-xs uppercase tracking-wide text-gray-400">
-                  <b>Job-loss</b> monthly savings reduction
-                </span>
-                <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Reduces your current inferred TTM monthly savings by this
-                  amount to estimate how much losing your job would delay FIRE.
-                </p>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={draftTimeToFireSettings.jobLossMonthlySavingsReduction}
-                  onChange={(event) =>
-                    setDraftTimeToFireSettings((prev) => ({
-                      ...prev,
-                      jobLossMonthlySavingsReduction: parseNumber(
-                        event.target.value,
-                      ),
-                    }))
-                  }
-                  className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  This keeps the current TTM estimate as the baseline and
-                  subtracts this monthly reduction before recomputing Time to
-                  FIRE.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowTimeToFireSettingsModal(false)}
-                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveTimeToFireSettings}
-                  className="rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-sm font-medium text-white transition-colors hover:from-orange-600 hover:to-red-600"
-                >
-                  Save Settings
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <TimeToFireSettingsModal
+          fireSettings={fireSettings}
+          ttmRangeLabel={ttmRangeLabel}
+          ttmWindowStartOrdinal={ttmWindowStartOrdinal}
+          ttmWindowEndOrdinal={ttmWindowEndOrdinal}
+          onClose={() => setShowTimeToFireSettingsModal(false)}
+          onSave={handleSaveTimeToFireSettings}
+        />
       ) : null}
     </>
   );
