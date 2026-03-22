@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Calculator,
+  FileText,
   Download,
   LogOut,
   Mail,
@@ -23,6 +24,7 @@ import CategoryConfig from "./components/CategoryConfig";
 import ProgressSummary from "./components/ProgressSummary";
 import InvestmentPlannerPage from "./components/InvestmentPlannerPage";
 import FireTracker from "./components/FireTracker";
+import CalculationsPage from "./components/CalculationsPage";
 import RetirementConfigModal from "./components/RetirementConfigModal";
 import ShareAccountModal from "./components/ShareAccountModal";
 import {
@@ -34,7 +36,11 @@ import {
 } from "./lib/firePreferences";
 import { buildYearCsv, parseYearCsv } from "./lib/netWorthCsv";
 
-type AppPage = "net-worth" | "fire-tracker" | "investment-planner";
+type AppPage =
+  | "net-worth"
+  | "fire-tracker"
+  | "investment-planner"
+  | "calculations";
 type NetWorthDisplay = "summary" | "chart";
 
 function App() {
@@ -531,6 +537,28 @@ function App() {
                         </span>
                       ) : null}
                     </button>
+
+                    <button
+                      onClick={() => {
+                        setShowConfig(false);
+                        setActivePage("calculations");
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
+                        activePage === "calculations"
+                          ? "border-slate-300 bg-slate-50 text-slate-800 shadow-sm"
+                          : "border-gray-200 text-gray-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText size={16} />
+                        Calculations
+                      </span>
+                      {activePage === "calculations" ? (
+                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-800">
+                          Active
+                        </span>
+                      ) : null}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -622,6 +650,8 @@ function App() {
                       setShowRetirementConfig(true)
                     }
                   />
+                ) : activePage === "calculations" ? (
+                  <CalculationsPage />
                 ) : (
                   <InvestmentPlannerPage
                     accountUserId={activeAccountId ?? user.id}
