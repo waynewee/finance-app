@@ -255,43 +255,46 @@ const calculationSections: CalculationSection[] = [
   {
     title: "Investment Planner",
     description:
-      "Planner math converts a monthly budget and target allocation into share counts, actual spend, and leftover cash after rounding to the configured buy step.",
+      "Planner math selects an allocation profile from years-to-FIRE, rolls up holding-level market values into each category, and generates buy-only or rebalance recommendations.",
     icon: FileText,
     iconClassName: "from-amber-50 to-white text-amber-700",
     entries: [
       {
-        title: "Allocation and per-asset budget",
+        title: "Profile selection by FIRE horizon",
         source: "InvestmentPlannerPage.tsx",
         explanation:
-          "The planner first totals the entered allocation, then splits the monthly budget across assets by target percentage.",
+          "The planner computes years remaining until the configured target FIRE age, then picks the first allocation profile whose year-band contains that value.",
         formulas: [
-          "totalAllocation = sum(all asset targetPercentage values)",
-          "allocationGap = 100 - totalAllocation",
-          "plannedAmount = monthlyBudget * (targetPercentage / 100)",
+          "yearsUntilFire = max(targetFireAge - currentAge, 0) when both inputs are set",
+          "profile matches when yearsUntilFire >= minYearsUntilFire and yearsUntilFire < maxYearsUntilFire",
+          "If no profile matches or FIRE age inputs are missing, the first profile is used as a fallback",
+          "normalizedTargetWeight = enteredCategoryPercentage / sum(all entered category percentages in the active profile)",
         ],
       },
       {
-        title: "Share rounding and leftover cash",
+        title: "Target value and rebalance delta",
         source: "InvestmentPlannerPage.tsx",
         explanation:
-          "Raw share counts are rounded down to the asset's allowed increment so the recommendation never overspends the planned amount.",
+          "For each category, the planner first combines manual value with holding-level market value, then computes the post-contribution target dollar value and the gap versus that current category total.",
         formulas: [
-          "rawShares = currentPrice > 0 ? plannedAmount / currentPrice : NaN",
-          "roundedShares = floor((rawShares + 1e-10) / shareIncrement) * shareIncrement",
-          "actualSpend = roundedShares * currentPrice",
-          "leftoverAmount = max(plannedAmount - actualSpend, 0)",
+          "holdingMarketValue = sharesOwned * latestPrice",
+          "currentHoldingValue = manualCategoryValue + sum(all holdingMarketValue values in the category)",
+          "projectedPortfolioValue = currentPortfolioValue + monthlyInvestmentAmount",
+          "targetValue = projectedPortfolioValue * normalizedTargetWeight",
+          "rebalanceDelta = targetValue - currentHoldingValue",
+          "rebalance recommendation = rebalanceDelta, where positive means buy and negative means sell",
         ],
       },
       {
-        title: "Quote freshness thresholds",
+        title: "Buy-only contribution routing",
         source: "InvestmentPlannerPage.tsx",
         explanation:
-          "Quote age is measured in milliseconds and translated into freshness badges for the planner table.",
+          "Buy-only mode never suggests sells. Instead, it distributes the new monthly contribution across categories in proportion to their positive deficits versus the post-contribution target.",
         formulas: [
-          "quoteAgeMs = now - quoteUpdatedAt",
-          "fresh = quoteAgeHours <= 24",
-          "stale = quoteAgeHours > 24",
-          "manual = no quote timestamp is present",
+          "positiveDeficit = max(rebalanceDelta, 0)",
+          "sumPositiveDeficits = sum(all positiveDeficit values)",
+          "buyOnlyRecommendation = monthlyInvestmentAmount * positiveDeficit / sumPositiveDeficits when sumPositiveDeficits > 0",
+          "If all deficits are zero, buy-only mode falls back to normalized target weights",
         ],
       },
     ],

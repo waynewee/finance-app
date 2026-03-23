@@ -4,17 +4,22 @@ create table if not exists public.categories (
   user_id uuid not null references auth.users (id) on delete cascade,
   id text not null,
   name text not null,
+  archived boolean not null default false,
   sort_order integer not null default 0,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   primary key (user_id, id)
 );
 
+alter table public.categories
+  add column if not exists archived boolean not null default false;
+
 create table if not exists public.subcategories (
   user_id uuid not null references auth.users (id) on delete cascade,
   id text not null,
   category_id text not null,
   name text not null,
+  archived boolean not null default false,
   sort_order integer not null default 0,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -24,6 +29,9 @@ create table if not exists public.subcategories (
     references public.categories (user_id, id)
     on delete cascade
 );
+
+alter table public.subcategories
+  add column if not exists archived boolean not null default false;
 
 create table if not exists public.monthly_values (
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -461,12 +469,16 @@ using (public.can_access_account(user_id));
 create table if not exists public.investment_assets (
   user_id uuid not null references auth.users (id) on delete cascade,
   id text not null,
+  category_id text,
   symbol text not null,
   name text not null,
   target_percentage numeric(7, 4) not null default 0,
   current_price numeric(16, 4) not null default 0,
+  manual_price numeric(16, 4),
   share_increment numeric(16, 8) not null default 1,
+  shares_owned numeric(16, 8) not null default 0,
   quote_updated_at timestamptz,
+  manual_price_updated_at timestamptz,
   sort_order integer not null default 0,
   updated_at timestamptz not null default timezone('utc', now()),
   primary key (user_id, id)
@@ -476,7 +488,19 @@ alter table public.investment_assets
 add column if not exists quote_updated_at timestamptz;
 
 alter table public.investment_assets
+add column if not exists manual_price numeric(16, 4);
+
+alter table public.investment_assets
+add column if not exists manual_price_updated_at timestamptz;
+
+alter table public.investment_assets
 add column if not exists share_increment numeric(16, 8) not null default 1;
+
+alter table public.investment_assets
+add column if not exists category_id text;
+
+alter table public.investment_assets
+add column if not exists shares_owned numeric(16, 8) not null default 0;
 
 drop trigger if exists investment_assets_set_updated_at on public.investment_assets;
 create trigger investment_assets_set_updated_at
@@ -511,6 +535,231 @@ with check (public.can_access_account(user_id));
 drop policy if exists "investment_assets_delete_own" on public.investment_assets;
 create policy "investment_assets_delete_own"
 on public.investment_assets
+for delete
+to authenticated
+using (public.can_access_account(user_id));
+
+create table if not exists public.investment_plan_settings (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  id text not null default 'primary',
+  monthly_investment_amount numeric(16, 2) not null default 0,
+  rebalance_mode text not null default 'buy-only',
+  updated_at timestamptz not null default timezone('utc', now()),
+  primary key (user_id, id),
+  constraint investment_plan_settings_rebalance_mode_check
+    check (rebalance_mode in ('buy-only', 'rebalance'))
+);
+
+create table if not exists public.investment_asset_categories (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  id text not null,
+  name text not null,
+  current_value numeric(16, 2) not null default 0,
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default timezone('utc', now()),
+  primary key (user_id, id)
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'investment_assets_category_fk'
+  ) then
+    alter table public.investment_assets
+      add constraint investment_assets_category_fk
+      foreign key (user_id, category_id)
+      references public.investment_asset_categories (user_id, id)
+      on delete cascade;
+  end if;
+end;
+$$;
+
+create index if not exists investment_assets_category_idx
+  on public.investment_assets (user_id, category_id);
+
+create table if not exists public.investment_allocation_profiles (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  id text not null,
+  name text not null,
+  min_years_until_fire numeric(6, 2),
+  max_years_until_fire numeric(6, 2),
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default timezone('utc', now()),
+  primary key (user_id, id),
+  constraint investment_allocation_profiles_year_band_check
+    check (
+      (min_years_until_fire is null or min_years_until_fire >= 0)
+      and (max_years_until_fire is null or max_years_until_fire >= 0)
+      and (
+        min_years_until_fire is null
+        or max_years_until_fire is null
+        or min_years_until_fire < max_years_until_fire
+      )
+    )
+);
+
+create table if not exists public.investment_profile_allocations (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  profile_id text not null,
+  category_id text not null,
+  target_percentage numeric(7, 4) not null default 0,
+  updated_at timestamptz not null default timezone('utc', now()),
+  primary key (user_id, profile_id, category_id),
+  constraint investment_profile_allocations_profile_fk
+    foreign key (user_id, profile_id)
+    references public.investment_allocation_profiles (user_id, id)
+    on delete cascade,
+  constraint investment_profile_allocations_category_fk
+    foreign key (user_id, category_id)
+    references public.investment_asset_categories (user_id, id)
+    on delete cascade,
+  constraint investment_profile_allocations_target_percentage_check
+    check (target_percentage >= 0)
+);
+
+drop trigger if exists investment_plan_settings_set_updated_at on public.investment_plan_settings;
+create trigger investment_plan_settings_set_updated_at
+before update on public.investment_plan_settings
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists investment_asset_categories_set_updated_at on public.investment_asset_categories;
+create trigger investment_asset_categories_set_updated_at
+before update on public.investment_asset_categories
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists investment_allocation_profiles_set_updated_at on public.investment_allocation_profiles;
+create trigger investment_allocation_profiles_set_updated_at
+before update on public.investment_allocation_profiles
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists investment_profile_allocations_set_updated_at on public.investment_profile_allocations;
+create trigger investment_profile_allocations_set_updated_at
+before update on public.investment_profile_allocations
+for each row
+execute function public.set_updated_at();
+
+alter table public.investment_plan_settings enable row level security;
+alter table public.investment_asset_categories enable row level security;
+alter table public.investment_allocation_profiles enable row level security;
+alter table public.investment_profile_allocations enable row level security;
+
+drop policy if exists "investment_plan_settings_select_own" on public.investment_plan_settings;
+create policy "investment_plan_settings_select_own"
+on public.investment_plan_settings
+for select
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_plan_settings_insert_own" on public.investment_plan_settings;
+create policy "investment_plan_settings_insert_own"
+on public.investment_plan_settings
+for insert
+to authenticated
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_plan_settings_update_own" on public.investment_plan_settings;
+create policy "investment_plan_settings_update_own"
+on public.investment_plan_settings
+for update
+to authenticated
+using (public.can_access_account(user_id))
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_plan_settings_delete_own" on public.investment_plan_settings;
+create policy "investment_plan_settings_delete_own"
+on public.investment_plan_settings
+for delete
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_asset_categories_select_own" on public.investment_asset_categories;
+create policy "investment_asset_categories_select_own"
+on public.investment_asset_categories
+for select
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_asset_categories_insert_own" on public.investment_asset_categories;
+create policy "investment_asset_categories_insert_own"
+on public.investment_asset_categories
+for insert
+to authenticated
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_asset_categories_update_own" on public.investment_asset_categories;
+create policy "investment_asset_categories_update_own"
+on public.investment_asset_categories
+for update
+to authenticated
+using (public.can_access_account(user_id))
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_asset_categories_delete_own" on public.investment_asset_categories;
+create policy "investment_asset_categories_delete_own"
+on public.investment_asset_categories
+for delete
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_allocation_profiles_select_own" on public.investment_allocation_profiles;
+create policy "investment_allocation_profiles_select_own"
+on public.investment_allocation_profiles
+for select
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_allocation_profiles_insert_own" on public.investment_allocation_profiles;
+create policy "investment_allocation_profiles_insert_own"
+on public.investment_allocation_profiles
+for insert
+to authenticated
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_allocation_profiles_update_own" on public.investment_allocation_profiles;
+create policy "investment_allocation_profiles_update_own"
+on public.investment_allocation_profiles
+for update
+to authenticated
+using (public.can_access_account(user_id))
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_allocation_profiles_delete_own" on public.investment_allocation_profiles;
+create policy "investment_allocation_profiles_delete_own"
+on public.investment_allocation_profiles
+for delete
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_profile_allocations_select_own" on public.investment_profile_allocations;
+create policy "investment_profile_allocations_select_own"
+on public.investment_profile_allocations
+for select
+to authenticated
+using (public.can_access_account(user_id));
+
+drop policy if exists "investment_profile_allocations_insert_own" on public.investment_profile_allocations;
+create policy "investment_profile_allocations_insert_own"
+on public.investment_profile_allocations
+for insert
+to authenticated
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_profile_allocations_update_own" on public.investment_profile_allocations;
+create policy "investment_profile_allocations_update_own"
+on public.investment_profile_allocations
+for update
+to authenticated
+using (public.can_access_account(user_id))
+with check (public.can_access_account(user_id));
+
+drop policy if exists "investment_profile_allocations_delete_own" on public.investment_profile_allocations;
+create policy "investment_profile_allocations_delete_own"
+on public.investment_profile_allocations
 for delete
 to authenticated
 using (public.can_access_account(user_id));

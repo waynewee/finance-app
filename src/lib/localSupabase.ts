@@ -3,6 +3,7 @@ import { DEFAULT_CATEGORIES, type Category } from "../data/defaultCategories";
 export interface CategoryRow {
   id: string;
   name: string;
+  archived: boolean;
   sort_order: number;
 }
 
@@ -10,6 +11,7 @@ export interface SubcategoryRow {
   id: string;
   category_id: string;
   name: string;
+  archived: boolean;
   sort_order: number;
 }
 
@@ -97,6 +99,7 @@ function mapCategoriesToRows(
     categories: categories.map((category, index) => ({
       id: category.id,
       name: category.name,
+      archived: category.archived ?? false,
       sort_order: index,
     })),
     subcategories: categories.flatMap((category) =>
@@ -104,6 +107,7 @@ function mapCategoriesToRows(
         id: subcategory.id,
         category_id: category.id,
         name: subcategory.name,
+        archived: subcategory.archived ?? false,
         sort_order: index,
       })),
     ),

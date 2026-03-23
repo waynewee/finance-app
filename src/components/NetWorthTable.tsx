@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { type Category, MONTHS } from "../data/defaultCategories";
 import { HIDDEN_VALUE } from "../lib/valueMasking";
@@ -53,13 +53,19 @@ export default function NetWorthTable({
   const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
   const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
   const [editValue, setEditValue] = useState("");
+  const visibleCategories = useMemo(
+    () => categories.filter((category) => !category.archived),
+    [categories],
+  );
 
   const visibleSubcategories = useMemo(
     () =>
-      categories.flatMap((category) =>
-        collapsedCategories.has(category.id) ? [] : category.subcategories,
+      visibleCategories.flatMap((category) =>
+        collapsedCategories.has(category.id)
+          ? []
+          : category.subcategories.filter((subcategory) => !subcategory.archived),
       ),
-    [categories, collapsedCategories],
+    [visibleCategories, collapsedCategories],
   );
 
   const toggleCategory = (catId: string) => {
@@ -215,13 +221,12 @@ export default function NetWorthTable({
             </td>
           </tr>
 
-          {categories.map((cat) => {
+          {visibleCategories.map((cat) => {
             const isCollapsed = collapsedCategories.has(cat.id);
             return (
-              <>
+              <Fragment key={cat.id}>
                 {/* Category header row */}
                 <tr
-                  key={cat.id}
                   className="cursor-pointer border-t border-gray-200 bg-[#EEF9EA] transition-colors hover:bg-[#E1F4DB]"
                   onClick={() => toggleCategory(cat.id)}
                 >
@@ -251,7 +256,9 @@ export default function NetWorthTable({
 
                 {/* Subcategory rows */}
                 {!isCollapsed &&
-                  cat.subcategories.map((sub) => (
+                  cat.subcategories
+                    .filter((sub) => !sub.archived)
+                    .map((sub) => (
                     <tr
                       key={sub.id}
                       className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
@@ -418,7 +425,7 @@ export default function NetWorthTable({
                       </td>
                     </tr>
                   ))}
-              </>
+              </Fragment>
             );
           })}
         </tbody>

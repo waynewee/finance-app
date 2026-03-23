@@ -1,4 +1,8 @@
-import { DEFAULT_CATEGORIES, type Category } from "../data/defaultCategories";
+import {
+  DEFAULT_CATEGORIES,
+  normalizeCategories,
+  type Category,
+} from "../data/defaultCategories";
 import type { RetirementSystemConfig } from "./retirementSystem";
 import { supabase } from "./supabase";
 
@@ -57,6 +61,7 @@ interface CategoryRow {
   user_id: string;
   id: string;
   name: string;
+  archived: boolean | null;
   sort_order: number;
 }
 
@@ -65,6 +70,7 @@ interface SubcategoryRow {
   id: string;
   category_id: string;
   name: string;
+  archived: boolean | null;
   sort_order: number;
 }
 
@@ -104,7 +110,7 @@ interface FireSettingsRow {
 
 const FIRE_SETTINGS_ROW_ID = "primary";
 const NET_WORTH_STATE_CACHE_PREFIX = "finance_app_net_worth_state";
-const NET_WORTH_STATE_CACHE_VERSION = 1;
+const NET_WORTH_STATE_CACHE_VERSION = 3;
 
 interface CachedNetWorthState {
   version: number;
@@ -204,17 +210,23 @@ function buildCategories(
   categoryRows: CategoryRow[],
   subcategoryRows: SubcategoryRow[],
 ): Category[] {
-  return categoryRows.map((categoryRow) => ({
-    id: categoryRow.id,
-    name: categoryRow.name,
-    subcategories: subcategoryRows
-      .filter((subcategoryRow) => subcategoryRow.category_id === categoryRow.id)
-      .sort((left, right) => left.sort_order - right.sort_order)
-      .map((subcategoryRow) => ({
-        id: subcategoryRow.id,
-        name: subcategoryRow.name,
-      })),
-  }));
+  return normalizeCategories(
+    categoryRows.map((categoryRow) => ({
+      id: categoryRow.id,
+      name: categoryRow.name,
+      archived: categoryRow.archived ?? false,
+      subcategories: subcategoryRows
+        .filter(
+          (subcategoryRow) => subcategoryRow.category_id === categoryRow.id,
+        )
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((subcategoryRow) => ({
+          id: subcategoryRow.id,
+          name: subcategoryRow.name,
+          archived: subcategoryRow.archived ?? false,
+        })),
+    })),
+  );
 }
 
 function buildMonthlyData(rows: MonthlyValueRow[]): MonthlyData {
@@ -255,12 +267,12 @@ export async function loadNetWorthState(userId: string): Promise<{
   ] = await Promise.all([
     supabase
       .from("categories")
-      .select("user_id, id, name, sort_order")
+      .select("user_id, id, name, archived, sort_order")
       .eq("user_id", userId)
       .order("sort_order"),
     supabase
       .from("subcategories")
-      .select("user_id, id, category_id, name, sort_order")
+      .select("user_id, id, category_id, name, archived, sort_order")
       .eq("user_id", userId)
       .order("sort_order"),
     supabase
@@ -434,6 +446,7 @@ export async function replaceCategories(
     user_id: userId,
     id: category.id,
     name: category.name,
+    archived: category.archived,
     sort_order: index,
   }));
 
@@ -443,6 +456,7 @@ export async function replaceCategories(
       id: subcategory.id,
       category_id: category.id,
       name: subcategory.name,
+      archived: subcategory.archived,
       sort_order: index,
     })),
   );
@@ -453,11 +467,11 @@ export async function replaceCategories(
   ] = await Promise.all([
     supabase
       .from("categories")
-      .select("user_id, id, name, sort_order")
+      .select("user_id, id, name, archived, sort_order")
       .eq("user_id", userId),
     supabase
       .from("subcategories")
-      .select("user_id, id, category_id, name, sort_order")
+      .select("user_id, id, category_id, name, archived, sort_order")
       .eq("user_id", userId),
   ]);
 

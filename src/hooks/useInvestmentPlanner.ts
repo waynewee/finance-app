@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  loadInvestmentAssets,
-  replaceInvestmentAssets,
-  type InvestmentAsset,
+  loadInvestmentPlannerData,
+  replaceInvestmentPlannerData,
+  type InvestmentPlannerData,
 } from "../lib/investmentPlannerRepository";
+import { getDefaultInvestmentPlannerData } from "../lib/investmentPlanner";
 
 export function useInvestmentPlanner(accountUserId: string | null) {
-  const [assets, setAssets] = useState<InvestmentAsset[]>([]);
+  const [plan, setPlan] = useState<InvestmentPlannerData>(
+    getDefaultInvestmentPlannerData(),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,7 +17,7 @@ export function useInvestmentPlanner(accountUserId: string | null) {
     let isMounted = true;
 
     if (!accountUserId) {
-      setAssets([]);
+      setPlan(getDefaultInvestmentPlannerData());
       setError(null);
       setIsLoading(false);
       return () => {
@@ -26,12 +29,12 @@ export function useInvestmentPlanner(accountUserId: string | null) {
       setIsLoading(true);
 
       try {
-        const nextAssets = await loadInvestmentAssets(accountUserId);
+        const nextPlan = await loadInvestmentPlannerData(accountUserId);
         if (!isMounted) {
           return;
         }
 
-        setAssets(nextAssets);
+        setPlan(nextPlan);
         setError(null);
       } catch (loadError) {
         if (!isMounted) {
@@ -41,7 +44,7 @@ export function useInvestmentPlanner(accountUserId: string | null) {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Failed to load planner assets.",
+            : "Failed to load planner settings.",
         );
       } finally {
         if (isMounted) {
@@ -57,27 +60,22 @@ export function useInvestmentPlanner(accountUserId: string | null) {
     };
   }, [accountUserId]);
 
-  const saveAssets = useCallback(
-    async (nextAssets: InvestmentAsset[]) => {
+  const savePlan = useCallback(
+    async (nextPlan: InvestmentPlannerData) => {
       if (!accountUserId) {
         return;
       }
 
-      const normalizedAssets = nextAssets.map((asset, index) => ({
-        ...asset,
-        sortOrder: index,
-      }));
-
-      setAssets(normalizedAssets);
+      setPlan(nextPlan);
 
       try {
-        await replaceInvestmentAssets(accountUserId, normalizedAssets);
+        await replaceInvestmentPlannerData(accountUserId, nextPlan);
         setError(null);
       } catch (saveError) {
         setError(
           saveError instanceof Error
             ? saveError.message
-            : "Failed to save planner assets.",
+            : "Failed to save planner settings.",
         );
         throw saveError;
       }
@@ -86,9 +84,9 @@ export function useInvestmentPlanner(accountUserId: string | null) {
   );
 
   return {
-    assets,
+    plan,
     isLoading,
     error,
-    saveAssets,
+    savePlan,
   };
 }

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   Plus,
   Trash2,
   GripVertical,
@@ -53,7 +55,7 @@ export default function CategoryConfig({
     if (!name) return;
     setDraft((prev) => [
       ...prev,
-      { id: generateId(name), name, subcategories: [] },
+      { id: generateId(name), name, archived: false, subcategories: [] },
     ]);
     setNewCatName("");
   };
@@ -64,10 +66,19 @@ export default function CategoryConfig({
   const updateCategoryName = (catId: string, name: string) =>
     setDraft((prev) => prev.map((c) => (c.id === catId ? { ...c, name } : c)));
 
+  const toggleCategoryArchived = (catId: string) =>
+    setDraft((prev) =>
+      prev.map((category) =>
+        category.id === catId
+          ? { ...category, archived: !category.archived }
+          : category,
+      ),
+    );
+
   const addSubcategory = (catId: string) => {
     const name = (newSubNames[catId] ?? "").trim();
     if (!name) return;
-    const newSub: Subcategory = { id: generateId(name), name };
+    const newSub: Subcategory = { id: generateId(name), name, archived: false };
     setDraft((prev) =>
       prev.map((c) =>
         c.id === catId
@@ -101,6 +112,22 @@ export default function CategoryConfig({
               ),
             }
           : c,
+      ),
+    );
+
+  const toggleSubcategoryArchived = (catId: string, subId: string) =>
+    setDraft((prev) =>
+      prev.map((category) =>
+        category.id === catId
+          ? {
+              ...category,
+              subcategories: category.subcategories.map((subcategory) =>
+                subcategory.id === subId
+                  ? { ...subcategory, archived: !subcategory.archived }
+                  : subcategory,
+              ),
+            }
+          : category,
       ),
     );
 
@@ -169,13 +196,21 @@ export default function CategoryConfig({
 
         {/* Body */}
         <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Archived categories and subcategories stay in your saved history
+            but are hidden from the net worth table until you unarchive them.
+          </div>
           {draft.map((cat, catIdx) => (
             <div
               key={cat.id}
               className="border border-gray-200 rounded-xl overflow-hidden"
             >
               {/* Category row */}
-              <div className="flex items-center gap-2 bg-[#EEF9EA] px-3 py-2">
+              <div
+                className={`flex items-center gap-2 px-3 py-2 ${
+                  cat.archived ? "bg-gray-100" : "bg-[#EEF9EA]"
+                }`}
+              >
                 <button
                   title="Drag to reorder"
                   className="text-gray-400 cursor-grab active:cursor-grabbing flex flex-col gap-0.5"
@@ -202,11 +237,49 @@ export default function CategoryConfig({
                 <input
                   value={cat.name}
                   onChange={(e) => updateCategoryName(cat.id, e.target.value)}
-                  className="flex-1 border-b border-transparent bg-transparent py-0.5 font-semibold text-[#1E7A18] outline-none focus:border-[#2CA01C]"
+                  className={`flex-1 border-b border-transparent bg-transparent py-0.5 font-semibold outline-none ${
+                    cat.archived
+                      ? "text-gray-500 focus:border-gray-400"
+                      : "text-[#1E7A18] focus:border-[#2CA01C]"
+                  }`}
                 />
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    cat.archived
+                      ? "bg-gray-200 text-gray-600"
+                      : "bg-white/80 text-[#1E7A18]"
+                  }`}
+                >
+                  {cat.archived ? "Archived" : "Active"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleCategoryArchived(cat.id)}
+                  className={`rounded-lg p-1.5 transition-colors ${
+                    cat.archived
+                      ? "text-gray-500 hover:bg-white hover:text-gray-700"
+                      : "text-amber-600 hover:bg-amber-100 hover:text-amber-700"
+                  }`}
+                  aria-label={
+                    cat.archived ? "Unarchive category" : "Archive category"
+                  }
+                  title={
+                    cat.archived ? "Unarchive category" : "Archive category"
+                  }
+                >
+                  {cat.archived ? (
+                    <ArchiveRestore size={15} />
+                  ) : (
+                    <Archive size={15} />
+                  )}
+                </button>
                 <button
                   onClick={() => toggleCat(cat.id)}
-                  className="text-[#57B44B] hover:text-[#1E7A18]"
+                  className={
+                    cat.archived
+                      ? "text-gray-400 hover:text-gray-600"
+                      : "text-[#57B44B] hover:text-[#1E7A18]"
+                  }
                 >
                   {expandedCats.has(cat.id) ? (
                     <ChevronDown size={16} />
@@ -254,8 +327,46 @@ export default function CategoryConfig({
                         onChange={(e) =>
                           updateSubcategoryName(cat.id, sub.id, e.target.value)
                         }
-                        className="flex-1 border-b border-transparent bg-transparent py-0.5 text-sm text-gray-700 outline-none focus:border-[#9FD792]"
+                        className={`flex-1 border-b border-transparent bg-transparent py-0.5 text-sm outline-none ${
+                          sub.archived
+                            ? "text-gray-400 focus:border-gray-300"
+                            : "text-gray-700 focus:border-[#9FD792]"
+                        }`}
                       />
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          sub.archived
+                            ? "bg-gray-200 text-gray-600"
+                            : "bg-[#EEF9EA] text-[#1E7A18]"
+                        }`}
+                      >
+                        {sub.archived ? "Archived" : "Active"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleSubcategoryArchived(cat.id, sub.id)}
+                        className={`rounded-lg p-1 transition-colors ${
+                          sub.archived
+                            ? "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                            : "text-amber-600 hover:bg-amber-100 hover:text-amber-700"
+                        }`}
+                        aria-label={
+                          sub.archived
+                            ? "Unarchive subcategory"
+                            : "Archive subcategory"
+                        }
+                        title={
+                          sub.archived
+                            ? "Unarchive subcategory"
+                            : "Archive subcategory"
+                        }
+                      >
+                        {sub.archived ? (
+                          <ArchiveRestore size={13} />
+                        ) : (
+                          <Archive size={13} />
+                        )}
+                      </button>
                       <button
                         onClick={() => removeSubcategory(cat.id, sub.id)}
                         className="text-red-300 hover:text-red-500 transition-colors"

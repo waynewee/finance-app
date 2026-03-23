@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Category } from "../data/defaultCategories";
+import { normalizeCategories, type Category } from "../data/defaultCategories";
 import {
   cacheNetWorthState,
   DEFAULT_FIRE_SETTINGS,
@@ -131,11 +131,13 @@ export function useNetWorthData(accountUserId: string | null) {
 
     const cachedState = getCachedNetWorthState(accountUserId);
     if (cachedState) {
-      setCategories(cachedState.categories);
+      const normalizedCategories = normalizeCategories(cachedState.categories);
+
+      setCategories(normalizedCategories);
       setMonthlyData(cachedState.monthlyData);
       setFireSettings(cachedState.fireSettings);
       setIsLoading(false);
-      categoriesRef.current = cachedState.categories;
+      categoriesRef.current = normalizedCategories;
       monthlyDataRef.current = cachedState.monthlyData;
       fireSettingsRef.current = cachedState.fireSettings;
     } else {
@@ -149,10 +151,12 @@ export function useNetWorthData(accountUserId: string | null) {
           return;
         }
 
-        setCategories(state.categories);
+        const normalizedCategories = normalizeCategories(state.categories);
+
+        setCategories(normalizedCategories);
         setMonthlyData(state.monthlyData);
         setFireSettings(state.fireSettings);
-        syncCachedState(state);
+        syncCachedState({ ...state, categories: normalizedCategories });
         setError(null);
       } catch (loadError) {
         if (!isMounted) {
@@ -271,15 +275,19 @@ export function useNetWorthData(accountUserId: string | null) {
         return;
       }
 
-      setCategories(updated);
-      syncCachedState({ categories: updated });
-      void replaceCategories(accountUserId, updated).catch((saveError) => {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to save categories.",
-        );
-      });
+      const normalizedCategories = normalizeCategories(updated);
+
+      setCategories(normalizedCategories);
+      syncCachedState({ categories: normalizedCategories });
+      void replaceCategories(accountUserId, normalizedCategories).catch(
+        (saveError) => {
+          setError(
+            saveError instanceof Error
+              ? saveError.message
+              : "Failed to save categories.",
+          );
+        },
+      );
     },
     [accountUserId],
   );

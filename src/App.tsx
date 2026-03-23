@@ -634,7 +634,6 @@ function App() {
                         getMonthTotal={getMonthTotal}
                       />
                     ) : null}
-
                   </>
                 ) : activePage === "fire-tracker" ? (
                   <FireTracker
@@ -646,9 +645,7 @@ function App() {
                     snapshotPreference={fireSnapshotPreference}
                     onSnapshotPreferenceChange={updateFireSnapshotPreference}
                     onUpdateFireSettings={updateFireSettings}
-                    onOpenRetirementConfig={() =>
-                      setShowRetirementConfig(true)
-                    }
+                    onOpenRetirementConfig={() => setShowRetirementConfig(true)}
                   />
                 ) : activePage === "calculations" ? (
                   <CalculationsPage />
@@ -656,6 +653,7 @@ function App() {
                   <InvestmentPlannerPage
                     accountUserId={activeAccountId ?? user.id}
                     hideValues={hideValues}
+                    fireSettings={fireSettings}
                   />
                 )}
 
