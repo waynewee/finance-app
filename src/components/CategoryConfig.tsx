@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   Plus,
+  Rows3,
   Trash2,
   GripVertical,
   X,
@@ -78,7 +79,12 @@ export default function CategoryConfig({
   const addSubcategory = (catId: string) => {
     const name = (newSubNames[catId] ?? "").trim();
     if (!name) return;
-    const newSub: Subcategory = { id: generateId(name), name, archived: false };
+    const newSub: Subcategory = {
+      id: generateId(name),
+      name,
+      archived: false,
+      isReferenceOnly: false,
+    };
     setDraft((prev) =>
       prev.map((c) =>
         c.id === catId
@@ -124,6 +130,25 @@ export default function CategoryConfig({
               subcategories: category.subcategories.map((subcategory) =>
                 subcategory.id === subId
                   ? { ...subcategory, archived: !subcategory.archived }
+                  : subcategory,
+              ),
+            }
+          : category,
+      ),
+    );
+
+  const toggleSubcategoryReferenceOnly = (catId: string, subId: string) =>
+    setDraft((prev) =>
+      prev.map((category) =>
+        category.id === catId
+          ? {
+              ...category,
+              subcategories: category.subcategories.map((subcategory) =>
+                subcategory.id === subId
+                  ? {
+                      ...subcategory,
+                      isReferenceOnly: !subcategory.isReferenceOnly,
+                    }
                   : subcategory,
               ),
             }
@@ -197,8 +222,10 @@ export default function CategoryConfig({
         {/* Body */}
         <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-4">
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Archived categories and subcategories stay in your saved history
-            but are hidden from the net worth table until you unarchive them.
+            Archived categories and subcategories stay in your saved history but
+            are hidden from the net worth table until you unarchive them. Mark a
+            subcategory as reference-only to keep its monthly values visible
+            without including it in totals, summaries, or FIRE math.
           </div>
           {draft.map((cat, catIdx) => (
             <div
@@ -342,9 +369,39 @@ export default function CategoryConfig({
                       >
                         {sub.archived ? "Archived" : "Active"}
                       </span>
+                      {sub.isReferenceOnly ? (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+                          Reference only
+                        </span>
+                      ) : null}
                       <button
                         type="button"
-                        onClick={() => toggleSubcategoryArchived(cat.id, sub.id)}
+                        onClick={() =>
+                          toggleSubcategoryReferenceOnly(cat.id, sub.id)
+                        }
+                        className={`rounded-lg p-1 transition-colors ${
+                          sub.isReferenceOnly
+                            ? "text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+                            : "text-gray-400 hover:bg-gray-100 hover:text-sky-700"
+                        }`}
+                        aria-label={
+                          sub.isReferenceOnly
+                            ? "Include subcategory in calculations"
+                            : "Exclude subcategory from calculations"
+                        }
+                        title={
+                          sub.isReferenceOnly
+                            ? "Include in calculations"
+                            : "Reference-only row"
+                        }
+                      >
+                        <Rows3 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toggleSubcategoryArchived(cat.id, sub.id)
+                        }
                         className={`rounded-lg p-1 transition-colors ${
                           sub.archived
                             ? "text-gray-500 hover:bg-gray-100 hover:text-gray-700"

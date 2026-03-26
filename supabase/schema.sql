@@ -20,6 +20,7 @@ create table if not exists public.subcategories (
   category_id text not null,
   name text not null,
   archived boolean not null default false,
+  is_reference_only boolean not null default false,
   sort_order integer not null default 0,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -32,6 +33,9 @@ create table if not exists public.subcategories (
 
 alter table public.subcategories
   add column if not exists archived boolean not null default false;
+
+alter table public.subcategories
+  add column if not exists is_reference_only boolean not null default false;
 
 create table if not exists public.monthly_values (
   user_id uuid not null references auth.users (id) on delete cascade,

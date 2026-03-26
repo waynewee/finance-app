@@ -63,7 +63,9 @@ export default function NetWorthTable({
       visibleCategories.flatMap((category) =>
         collapsedCategories.has(category.id)
           ? []
-          : category.subcategories.filter((subcategory) => !subcategory.archived),
+          : category.subcategories.filter(
+              (subcategory) => !subcategory.archived,
+            ),
       ),
     [visibleCategories, collapsedCategories],
   );
@@ -259,172 +261,184 @@ export default function NetWorthTable({
                   cat.subcategories
                     .filter((sub) => !sub.archived)
                     .map((sub) => (
-                    <tr
-                      key={sub.id}
-                      className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="sticky left-0 z-10 bg-white px-4 py-2 pl-8 text-gray-600">
-                        {sub.name}
-                      </td>
-                      {MONTHS.map((_, monthIndex) => {
-                        const val = getValue(year, monthIndex, sub.id);
-                        const isEditing =
-                          editingCell?.sub === sub.id &&
-                          editingCell?.month === monthIndex;
-                        return (
-                          <td
-                            key={monthIndex}
-                            className="cursor-pointer px-1 py-1 text-right"
-                          >
-                            {isEditing ? (
-                              <input
-                                autoFocus
-                                type="text"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onBlur={() => commitEdit(sub.id, monthIndex)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter")
-                                    commitEdit(sub.id, monthIndex);
-                                  if (e.key === "ArrowRight") {
-                                    e.preventDefault();
-                                    commitEdit(sub.id, monthIndex);
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      0,
-                                      1,
-                                      { startEditing: true },
-                                    );
+                      <tr
+                        key={sub.id}
+                        className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="sticky left-0 z-10 bg-white px-4 py-2 pl-8 text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <span>{sub.name}</span>
+                            {sub.isReferenceOnly ? (
+                              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+                                Ref
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        {MONTHS.map((_, monthIndex) => {
+                          const val = getValue(year, monthIndex, sub.id);
+                          const isEditing =
+                            editingCell?.sub === sub.id &&
+                            editingCell?.month === monthIndex;
+                          return (
+                            <td
+                              key={monthIndex}
+                              className="cursor-pointer px-1 py-1 text-right"
+                            >
+                              {isEditing ? (
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onBlur={() => commitEdit(sub.id, monthIndex)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter")
+                                      commitEdit(sub.id, monthIndex);
+                                    if (e.key === "ArrowRight") {
+                                      e.preventDefault();
+                                      commitEdit(sub.id, monthIndex);
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        0,
+                                        1,
+                                        { startEditing: true },
+                                      );
+                                    }
+                                    if (e.key === "ArrowLeft") {
+                                      e.preventDefault();
+                                      commitEdit(sub.id, monthIndex);
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        0,
+                                        -1,
+                                        { startEditing: true },
+                                      );
+                                    }
+                                    if (e.key === "ArrowDown") {
+                                      e.preventDefault();
+                                      commitEdit(sub.id, monthIndex);
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        1,
+                                        0,
+                                        { startEditing: true },
+                                      );
+                                    }
+                                    if (e.key === "ArrowUp") {
+                                      e.preventDefault();
+                                      commitEdit(sub.id, monthIndex);
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        -1,
+                                        0,
+                                        { startEditing: true },
+                                      );
+                                    }
+                                    if (e.key === "Escape") {
+                                      cancelEdit();
+                                    }
+                                  }}
+                                  className="w-full rounded border border-[#9FD792] bg-[#EEF9EA] px-2 py-0.5 text-right text-sm outline-none focus:ring-2 focus:ring-[#2CA01C]/20"
+                                />
+                              ) : (
+                                <button
+                                  ref={(element) => {
+                                    cellRefs.current[
+                                      `${sub.id}-${monthIndex}`
+                                    ] = element;
+                                  }}
+                                  type="button"
+                                  onClick={() => {
+                                    if (
+                                      selectedCell?.sub === sub.id &&
+                                      selectedCell?.month === monthIndex
+                                    ) {
+                                      startEdit(sub.id, monthIndex, val);
+                                      return;
+                                    }
+
+                                    setSelectedCell({
+                                      sub: sub.id,
+                                      month: monthIndex,
+                                    });
+                                  }}
+                                  onDoubleClick={() =>
+                                    startEdit(sub.id, monthIndex, val)
                                   }
-                                  if (e.key === "ArrowLeft") {
-                                    e.preventDefault();
-                                    commitEdit(sub.id, monthIndex);
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      0,
-                                      -1,
-                                      { startEditing: true },
-                                    );
+                                  onFocus={() =>
+                                    setSelectedCell({
+                                      sub: sub.id,
+                                      month: monthIndex,
+                                    })
                                   }
-                                  if (e.key === "ArrowDown") {
-                                    e.preventDefault();
-                                    commitEdit(sub.id, monthIndex);
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      1,
-                                      0,
-                                      { startEditing: true },
-                                    );
-                                  }
-                                  if (e.key === "ArrowUp") {
-                                    e.preventDefault();
-                                    commitEdit(sub.id, monthIndex);
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      -1,
-                                      0,
-                                      { startEditing: true },
-                                    );
-                                  }
-                                  if (e.key === "Escape") {
-                                    cancelEdit();
-                                  }
-                                }}
-                                className="w-full rounded border border-[#9FD792] bg-[#EEF9EA] px-2 py-0.5 text-right text-sm outline-none focus:ring-2 focus:ring-[#2CA01C]/20"
-                              />
-                            ) : (
-                              <button
-                                ref={(element) => {
-                                  cellRefs.current[`${sub.id}-${monthIndex}`] =
-                                    element;
-                                }}
-                                type="button"
-                                onClick={() => {
-                                  if (
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      startEdit(sub.id, monthIndex, val);
+                                    }
+                                    if (e.key === "ArrowRight") {
+                                      e.preventDefault();
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        0,
+                                        1,
+                                      );
+                                    }
+                                    if (e.key === "ArrowLeft") {
+                                      e.preventDefault();
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        0,
+                                        -1,
+                                      );
+                                    }
+                                    if (e.key === "ArrowDown") {
+                                      e.preventDefault();
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        1,
+                                        0,
+                                      );
+                                    }
+                                    if (e.key === "ArrowUp") {
+                                      e.preventDefault();
+                                      moveSelection(
+                                        { sub: sub.id, month: monthIndex },
+                                        -1,
+                                        0,
+                                      );
+                                    }
+                                  }}
+                                  aria-label={`${sub.name} ${MONTHS[monthIndex]}`}
+                                  className={`block w-full rounded px-2 py-0.5 text-right text-gray-700 outline-none transition-colors hover:bg-[#EEF9EA] focus:bg-[#EEF9EA] ${
                                     selectedCell?.sub === sub.id &&
                                     selectedCell?.month === monthIndex
-                                  ) {
-                                    startEdit(sub.id, monthIndex, val);
-                                    return;
-                                  }
-
-                                  setSelectedCell({
-                                    sub: sub.id,
-                                    month: monthIndex,
-                                  });
-                                }}
-                                onDoubleClick={() =>
-                                  startEdit(sub.id, monthIndex, val)
-                                }
-                                onFocus={() =>
-                                  setSelectedCell({
-                                    sub: sub.id,
-                                    month: monthIndex,
-                                  })
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    startEdit(sub.id, monthIndex, val);
-                                  }
-                                  if (e.key === "ArrowRight") {
-                                    e.preventDefault();
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      0,
-                                      1,
-                                    );
-                                  }
-                                  if (e.key === "ArrowLeft") {
-                                    e.preventDefault();
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      0,
-                                      -1,
-                                    );
-                                  }
-                                  if (e.key === "ArrowDown") {
-                                    e.preventDefault();
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      1,
-                                      0,
-                                    );
-                                  }
-                                  if (e.key === "ArrowUp") {
-                                    e.preventDefault();
-                                    moveSelection(
-                                      { sub: sub.id, month: monthIndex },
-                                      -1,
-                                      0,
-                                    );
-                                  }
-                                }}
-                                aria-label={`${sub.name} ${MONTHS[monthIndex]}`}
-                                className={`block w-full rounded px-2 py-0.5 text-right text-gray-700 outline-none transition-colors hover:bg-[#EEF9EA] focus:bg-[#EEF9EA] ${
-                                  selectedCell?.sub === sub.id &&
-                                  selectedCell?.month === monthIndex
-                                    ? "ring-2 ring-[#2CA01C]/30"
-                                    : ""
-                                }`}
-                              >
-                                {hideValues ? (
-                                  HIDDEN_VALUE
-                                ) : val !== 0 ? (
-                                  formatNumber(val)
-                                ) : (
-                                  <span className="text-gray-300">—</span>
-                                )}
-                              </button>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="px-3 py-2 text-right text-gray-500 bg-gray-50">
-                        {displayTableValue(rowTotal(sub.id))}
-                      </td>
-                    </tr>
-                  ))}
+                                      ? "ring-2 ring-[#2CA01C]/30"
+                                      : ""
+                                  }`}
+                                >
+                                  {hideValues ? (
+                                    HIDDEN_VALUE
+                                  ) : val !== 0 ? (
+                                    formatNumber(val)
+                                  ) : (
+                                    <span className="text-gray-300">—</span>
+                                  )}
+                                </button>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-2 text-right text-gray-500 bg-gray-50">
+                          {sub.isReferenceOnly ? (
+                            <span className="text-sky-600">Ref</span>
+                          ) : (
+                            displayTableValue(rowTotal(sub.id))
+                          )}
+                        </td>
+                      </tr>
+                    ))}
               </Fragment>
             );
           })}

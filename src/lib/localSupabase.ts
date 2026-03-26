@@ -12,6 +12,7 @@ export interface SubcategoryRow {
   category_id: string;
   name: string;
   archived: boolean;
+  is_reference_only: boolean;
   sort_order: number;
 }
 
@@ -108,6 +109,7 @@ function mapCategoriesToRows(
         category_id: category.id,
         name: subcategory.name,
         archived: subcategory.archived ?? false,
+        is_reference_only: subcategory.isReferenceOnly ?? false,
         sort_order: index,
       })),
     ),

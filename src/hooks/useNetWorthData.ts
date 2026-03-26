@@ -21,10 +21,22 @@ interface LatestNetWorthSnapshot {
 
 export type NetWorthSnapshot = LatestNetWorthSnapshot;
 
+function getIncludedSubcategoryIds(categories: Category[]): Set<string> {
+  return new Set(
+    categories.flatMap((category) =>
+      category.subcategories
+        .filter((subcategory) => !subcategory.isReferenceOnly)
+        .map((subcategory) => subcategory.id),
+    ),
+  );
+}
+
 function getSortedSnapshots(
+  categories: Category[],
   monthlyData: MonthlyData,
 ): LatestNetWorthSnapshot[] {
   const snapshots: LatestNetWorthSnapshot[] = [];
+  const includedSubcategoryIds = getIncludedSubcategoryIds(categories);
 
   const yearKeys = Object.keys(monthlyData)
     .map((year) => Number(year))
@@ -44,8 +56,17 @@ function getSortedSnapshots(
         return;
       }
 
-      const total = Object.values(values).reduce(
-        (sum, value) => sum + (Number.isFinite(value) ? value : 0),
+      const total = Object.entries(values).reduce(
+        (sum, [subcategoryId, value]) => {
+          if (
+            !includedSubcategoryIds.has(subcategoryId) ||
+            !Number.isFinite(value)
+          ) {
+            return sum;
+          }
+
+          return sum + value;
+        },
         0,
       );
 
@@ -238,6 +259,10 @@ export function useNetWorthData(accountUserId: string | null) {
         return (
           total +
           cat.subcategories.reduce((catTotal, sub) => {
+            if (sub.isReferenceOnly) {
+              return catTotal;
+            }
+
             return catTotal + (monthlyData[year]?.[monthIndex]?.[sub.id] ?? 0);
           }, 0)
         );
@@ -251,6 +276,10 @@ export function useNetWorthData(accountUserId: string | null) {
       const cat = categories.find((c) => c.id === categoryId);
       if (!cat) return 0;
       return cat.subcategories.reduce((total, sub) => {
+        if (sub.isReferenceOnly) {
+          return total;
+        }
+
         return total + (monthlyData[year]?.[monthIndex]?.[sub.id] ?? 0);
       }, 0);
     },
@@ -258,16 +287,16 @@ export function useNetWorthData(accountUserId: string | null) {
   );
 
   const getLatestSnapshot = useCallback((): LatestNetWorthSnapshot | null => {
-    return getSortedSnapshots(monthlyData)[0] ?? null;
-  }, [monthlyData]);
+    return getSortedSnapshots(categories, monthlyData)[0] ?? null;
+  }, [categories, monthlyData]);
 
   const getPreviousSnapshot = useCallback((): LatestNetWorthSnapshot | null => {
-    return getSortedSnapshots(monthlyData)[1] ?? null;
-  }, [monthlyData]);
+    return getSortedSnapshots(categories, monthlyData)[1] ?? null;
+  }, [categories, monthlyData]);
 
   const getNetWorthSnapshots = useCallback((): LatestNetWorthSnapshot[] => {
-    return getSortedSnapshots(monthlyData);
-  }, [monthlyData]);
+    return getSortedSnapshots(categories, monthlyData);
+  }, [categories, monthlyData]);
 
   const updateCategories = useCallback(
     (updated: Category[]) => {

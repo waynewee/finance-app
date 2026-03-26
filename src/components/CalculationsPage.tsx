@@ -34,10 +34,10 @@ const calculationSections: CalculationSection[] = [
         title: "Monthly and category totals",
         source: "useNetWorthData.ts + NetWorthTable.tsx",
         explanation:
-          "The app builds every month total from the saved subcategory values, then rolls those totals up again for category rows and the table footer.",
+          "The app builds every month total from saved subcategory values that are not marked reference-only, then rolls those totals up again for category rows and the table footer.",
         formulas: [
-          "monthTotal(year, month) = sum(all category subcategory values for that month)",
-          "categoryMonthTotal(year, month, category) = sum(all subcategory values inside that category for that month)",
+          "monthTotal(year, month) = sum(all non-reference-only subcategory values for that month)",
+          "categoryMonthTotal(year, month, category) = sum(all non-reference-only subcategory values inside that category for that month)",
           "subcategoryRowTotal(year, subcategory) = sum(Jan..Dec values for that subcategory)",
           "categoryRowTotal(year, category) = sum(Jan..Dec categoryMonthTotal values)",
           "grandTotal(year) = sum(Jan..Dec monthTotal values)",
@@ -47,9 +47,9 @@ const calculationSections: CalculationSection[] = [
         title: "Snapshot totals",
         source: "useNetWorthData.ts",
         explanation:
-          "Latest and previous snapshots are derived by summing every stored value inside a recorded month, then sorting months from newest to oldest.",
+          "Latest and previous snapshots are derived by summing every non-reference-only stored value inside a recorded month, then sorting months from newest to oldest.",
         formulas: [
-          "snapshotTotal(year, month) = sum(all stored subcategory values for that month)",
+          "snapshotTotal(year, month) = sum(all stored subcategory values for that month where isReferenceOnly = false)",
           "latestSnapshot = first snapshot after sorting by year desc, month desc",
           "previousSnapshot = second snapshot after sorting by year desc, month desc",
         ],

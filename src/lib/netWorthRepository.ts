@@ -71,6 +71,7 @@ interface SubcategoryRow {
   category_id: string;
   name: string;
   archived: boolean | null;
+  is_reference_only: boolean | null;
   sort_order: number;
 }
 
@@ -224,6 +225,7 @@ function buildCategories(
           id: subcategoryRow.id,
           name: subcategoryRow.name,
           archived: subcategoryRow.archived ?? false,
+          isReferenceOnly: subcategoryRow.is_reference_only ?? false,
         })),
     })),
   );
@@ -272,7 +274,9 @@ export async function loadNetWorthState(userId: string): Promise<{
       .order("sort_order"),
     supabase
       .from("subcategories")
-      .select("user_id, id, category_id, name, archived, sort_order")
+      .select(
+        "user_id, id, category_id, name, archived, is_reference_only, sort_order",
+      )
       .eq("user_id", userId)
       .order("sort_order"),
     supabase
@@ -457,6 +461,7 @@ export async function replaceCategories(
       category_id: category.id,
       name: subcategory.name,
       archived: subcategory.archived,
+      is_reference_only: subcategory.isReferenceOnly,
       sort_order: index,
     })),
   );
@@ -471,7 +476,9 @@ export async function replaceCategories(
       .eq("user_id", userId),
     supabase
       .from("subcategories")
-      .select("user_id, id, category_id, name, archived, sort_order")
+      .select(
+        "user_id, id, category_id, name, archived, is_reference_only, sort_order",
+      )
       .eq("user_id", userId),
   ]);
 
