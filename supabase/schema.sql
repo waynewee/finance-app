@@ -108,6 +108,13 @@ create unique index if not exists account_invitations_owner_email_idx
 create index if not exists account_invitations_email_idx
   on public.account_invitations (invitee_email);
 
+create table if not exists public.account_value_locks (
+  owner_user_id uuid primary key references auth.users (id) on delete cascade,
+  password_hash text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create or replace function public.can_access_account(target_user_id uuid)
 returns boolean
 language sql
@@ -156,12 +163,19 @@ before update on public.account_invitations
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists account_value_locks_set_updated_at on public.account_value_locks;
+create trigger account_value_locks_set_updated_at
+before update on public.account_value_locks
+for each row
+execute function public.set_updated_at();
+
 alter table public.categories enable row level security;
 alter table public.subcategories enable row level security;
 alter table public.monthly_values enable row level security;
 alter table public.account_profiles enable row level security;
 alter table public.account_collaborators enable row level security;
 alter table public.account_invitations enable row level security;
+alter table public.account_value_locks enable row level security;
 
 drop policy if exists "account_profiles_select_accessible" on public.account_profiles;
 create policy "account_profiles_select_accessible"
@@ -271,6 +285,104 @@ on public.account_invitations
 for delete
 to authenticated
 using (auth.uid() = owner_user_id);
+
+create or replace function public.has_account_value_unlock_password(target_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when public.can_access_account(target_user_id) then exists (
+      select 1
+      from public.account_value_locks locks
+      where locks.owner_user_id = target_user_id
+    )
+    else false
+  end
+$$;
+
+create or replace function public.set_account_value_unlock_password(target_user_id uuid, password text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_password text := btrim(coalesce(password, ''));
+begin
+  if auth.uid() is distinct from target_user_id then
+    raise exception 'Only the account owner can change the value lock password.';
+  end if;
+
+  if length(normalized_password) < 8 then
+    raise exception 'Passwords must be at least 8 characters.';
+  end if;
+
+  insert into public.account_value_locks (owner_user_id, password_hash)
+  values (
+    target_user_id,
+    extensions.crypt(
+      normalized_password,
+      extensions.gen_salt('bf', 10)
+    )
+  )
+  on conflict (owner_user_id)
+  do update
+    set password_hash = excluded.password_hash,
+        updated_at = timezone('utc', now());
+end;
+$$;
+
+create or replace function public.clear_account_value_unlock_password(target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is distinct from target_user_id then
+    raise exception 'Only the account owner can remove the value lock password.';
+  end if;
+
+  delete from public.account_value_locks
+  where owner_user_id = target_user_id;
+end;
+$$;
+
+create or replace function public.verify_account_value_unlock_password(target_user_id uuid, password text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when public.can_access_account(target_user_id) then exists (
+      select 1
+      from public.account_value_locks locks
+      where locks.owner_user_id = target_user_id
+        and locks.password_hash = extensions.crypt(
+          btrim(coalesce(password, '')),
+          locks.password_hash
+        )
+    )
+    else false
+  end
+$$;
+
+revoke all on function public.has_account_value_unlock_password(uuid) from public;
+grant execute on function public.has_account_value_unlock_password(uuid) to authenticated;
+
+revoke all on function public.set_account_value_unlock_password(uuid, text) from public;
+grant execute on function public.set_account_value_unlock_password(uuid, text) to authenticated;
+
+revoke all on function public.clear_account_value_unlock_password(uuid) from public;
+grant execute on function public.clear_account_value_unlock_password(uuid) to authenticated;
+
+revoke all on function public.verify_account_value_unlock_password(uuid, text) from public;
+grant execute on function public.verify_account_value_unlock_password(uuid, text) to authenticated;
 
 drop policy if exists "categories_select_own" on public.categories;
 create policy "categories_select_own"

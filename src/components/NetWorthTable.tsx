@@ -79,6 +79,10 @@ export default function NetWorthTable({
   };
 
   const startEdit = (subId: string, monthIndex: number, current: number) => {
+    if (hideValues) {
+      return;
+    }
+
     const nextCell = { sub: subId, month: monthIndex };
     setSelectedCell(nextCell);
     setEditingCell(nextCell);
@@ -173,6 +177,15 @@ export default function NetWorthTable({
     setEditingCell(null);
     setEditValue("");
   }, [selectedCell, visibleSubcategories]);
+
+  useEffect(() => {
+    if (!hideValues) {
+      return;
+    }
+
+    setEditingCell(null);
+    setEditValue("");
+  }, [hideValues]);
 
   const monthTotals = MONTHS.map((_, i) => getMonthTotal(year, i));
   const rowTotal = (subcategoryId: string) =>

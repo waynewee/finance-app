@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { type User } from "@supabase/supabase-js";
 import { sendMagicLinkEmail } from "../lib/supabase";
 import {
+  clearAccountValueUnlockPassword,
   cancelAccountInvitation,
   claimPendingInvitations,
   ensureAccountProfile,
+  hasAccountValueUnlockPassword,
   inviteAccountCollaborator,
   loadAccessibleAccountActivity,
   loadAccessibleAccounts,
@@ -12,9 +14,11 @@ import {
   loadPendingAccountInvitations,
   removeAccountCollaborator,
   renameAccount,
+  setAccountValueUnlockPassword,
   type AccessibleAccount,
   type AccountCollaborator,
   type AccountInvitation,
+  verifyAccountValueUnlockPassword,
 } from "../lib/accountCollaborationRepository";
 
 interface SharingState {
@@ -84,6 +88,9 @@ export function useAccountAccess(user: User | null) {
     invitations: [],
     isLoading: false,
   });
+  const [hasValueLockPassword, setHasValueLockPassword] = useState(false);
+  const [isValueLockStatusLoading, setIsValueLockStatusLoading] =
+    useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -164,6 +171,31 @@ export function useAccountAccess(user: User | null) {
     });
   }, [activeAccountId, userId]);
 
+  const refreshValueLockStatus = useCallback(async () => {
+    if (!userId || !activeAccountId) {
+      setHasValueLockPassword(false);
+      setIsValueLockStatusLoading(false);
+      return;
+    }
+
+    setIsValueLockStatusLoading(true);
+
+    try {
+      const nextHasValueLockPassword =
+        await hasAccountValueUnlockPassword(activeAccountId);
+      setHasValueLockPassword(nextHasValueLockPassword);
+      setError(null);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Failed to load the value lock settings.",
+      );
+    } finally {
+      setIsValueLockStatusLoading(false);
+    }
+  }, [activeAccountId, userId]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -171,6 +203,8 @@ export function useAccountAccess(user: User | null) {
       setAccounts([]);
       setActiveAccountId(null);
       setSharing({ collaborators: [], invitations: [], isLoading: false });
+      setHasValueLockPassword(false);
+      setIsValueLockStatusLoading(false);
       setError(null);
       setIsLoading(false);
       setStoredActiveAccountId(null);
@@ -219,6 +253,10 @@ export function useAccountAccess(user: User | null) {
       setSharing({ collaborators: [], invitations: [], isLoading: false });
     }
   }, [activeAccountId, userId]);
+
+  useEffect(() => {
+    void refreshValueLockStatus();
+  }, [refreshValueLockStatus]);
 
   const selectAccount = useCallback((accountUserId: string) => {
     setActiveAccountId(accountUserId);
@@ -298,6 +336,49 @@ export function useAccountAccess(user: User | null) {
     [activeAccountId, refreshSharing, userId],
   );
 
+  const saveActiveAccountValueLockPassword = useCallback(
+    async (password: string) => {
+      if (!userId || activeAccountId !== userId) {
+        throw new Error(
+          "Only the account owner can change the value lock password.",
+        );
+      }
+
+      await setAccountValueUnlockPassword(userId, password);
+      setHasValueLockPassword(true);
+      setError(null);
+    },
+    [activeAccountId, userId],
+  );
+
+  const clearActiveAccountValueLock = useCallback(async () => {
+    if (!userId || activeAccountId !== userId) {
+      throw new Error(
+        "Only the account owner can remove the value lock password.",
+      );
+    }
+
+    await clearAccountValueUnlockPassword(userId);
+    setHasValueLockPassword(false);
+    setError(null);
+  }, [activeAccountId, userId]);
+
+  const verifyActiveAccountValueLock = useCallback(
+    async (password: string): Promise<boolean> => {
+      if (!activeAccountId) {
+        return false;
+      }
+
+      const isValid = await verifyAccountValueUnlockPassword(
+        activeAccountId,
+        password,
+      );
+      setError(null);
+      return isValid;
+    },
+    [activeAccountId],
+  );
+
   return {
     accounts,
     activeAccountId,
@@ -305,6 +386,8 @@ export function useAccountAccess(user: User | null) {
       accounts.find((account) => account.userId === activeAccountId) ?? null,
     isOwnerOfActiveAccount: Boolean(userId && activeAccountId === userId),
     sharing,
+    hasValueLockPassword,
+    isValueLockStatusLoading,
     isLoading,
     error,
     setActiveAccountId: selectAccount,
@@ -313,6 +396,10 @@ export function useAccountAccess(user: User | null) {
     inviteCollaborator,
     removeCollaborator,
     cancelInvitation,
+    saveActiveAccountValueLockPassword,
+    clearActiveAccountValueLock,
+    verifyActiveAccountValueLock,
+    refreshValueLockStatus,
     refreshAccounts,
   };
 }

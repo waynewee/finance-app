@@ -350,3 +350,75 @@ export async function cancelAccountInvitation(
     throw error;
   }
 }
+
+export async function hasAccountValueUnlockPassword(
+  accountUserId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc(
+    "has_account_value_unlock_password",
+    {
+      target_user_id: accountUserId,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data);
+}
+
+export async function setAccountValueUnlockPassword(
+  ownerUserId: string,
+  password: string,
+): Promise<void> {
+  const normalizedPassword = password.trim();
+  if (!normalizedPassword) {
+    throw new Error("Enter a password.");
+  }
+
+  const { error } = await supabase.rpc("set_account_value_unlock_password", {
+    target_user_id: ownerUserId,
+    password: normalizedPassword,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function clearAccountValueUnlockPassword(
+  ownerUserId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("clear_account_value_unlock_password", {
+    target_user_id: ownerUserId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function verifyAccountValueUnlockPassword(
+  accountUserId: string,
+  password: string,
+): Promise<boolean> {
+  const normalizedPassword = password.trim();
+  if (!normalizedPassword) {
+    throw new Error("Enter the value lock password.");
+  }
+
+  const { data, error } = await supabase.rpc(
+    "verify_account_value_unlock_password",
+    {
+      target_user_id: accountUserId,
+      password: normalizedPassword,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data);
+}

@@ -13,11 +13,14 @@ interface InviteResult {
 
 interface Props {
   accountName: string;
+  hasValueLockPassword: boolean;
   isOwner: boolean;
   collaborators: AccountCollaborator[];
   invitations: AccountInvitation[];
   isLoading: boolean;
   onRenameAccount: (accountName: string) => Promise<void>;
+  onSaveValueLockPassword: (password: string) => Promise<void>;
+  onClearValueLockPassword: () => Promise<void>;
   onInvite: (email: string) => Promise<InviteResult>;
   onRemoveCollaborator: (collaboratorUserId: string) => Promise<void>;
   onCancelInvitation: (invitationId: string) => Promise<void>;
@@ -34,11 +37,14 @@ function formatDate(value: string): string {
 
 export default function ShareAccountModal({
   accountName,
+  hasValueLockPassword,
   isOwner,
   collaborators,
   invitations,
   isLoading,
   onRenameAccount,
+  onSaveValueLockPassword,
+  onClearValueLockPassword,
   onInvite,
   onRemoveCollaborator,
   onCancelInvitation,
@@ -48,6 +54,8 @@ export default function ShareAccountModal({
 
   const [draftAccountName, setDraftAccountName] = useState(accountName);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [valueLockPassword, setValueLockPassword] = useState("");
+  const [valueLockConfirmPassword, setValueLockConfirmPassword] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -92,6 +100,75 @@ export default function ShareAccountModal({
         inviteError instanceof Error
           ? inviteError.message
           : "Failed to invite collaborator.",
+      );
+      setNotice(null);
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const handleSaveValueLockPassword = async () => {
+    const normalizedPassword = valueLockPassword.trim();
+    const normalizedConfirmation = valueLockConfirmPassword.trim();
+
+    if (!normalizedPassword) {
+      setError("Enter a value lock password.");
+      setNotice(null);
+      return;
+    }
+
+    if (normalizedPassword.length < 8) {
+      setError("Value lock passwords must be at least 8 characters.");
+      setNotice(null);
+      return;
+    }
+
+    if (normalizedPassword !== normalizedConfirmation) {
+      setError("Value lock password confirmation does not match.");
+      setNotice(null);
+      return;
+    }
+
+    setBusyKey("value-lock");
+
+    try {
+      await onSaveValueLockPassword(normalizedPassword);
+      setValueLockPassword("");
+      setValueLockConfirmPassword("");
+      setNotice(
+        hasValueLockPassword
+          ? "Value lock password updated. Hidden values now require the new password."
+          : "Value lock password saved. Hidden values now require this password to unlock.",
+      );
+      setError(null);
+    } catch (valueLockError) {
+      setError(
+        valueLockError instanceof Error
+          ? valueLockError.message
+          : "Failed to save the value lock password.",
+      );
+      setNotice(null);
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const handleClearValueLockPassword = async () => {
+    setBusyKey("clear-value-lock");
+
+    try {
+      await onClearValueLockPassword();
+      setValueLockPassword("");
+      setValueLockConfirmPassword("");
+      setNotice(
+        "Value lock password removed. Set a new password before revealing values again.",
+      );
+      setError(null);
+    } catch (valueLockError) {
+      setError(
+        valueLockError instanceof Error
+          ? valueLockError.message
+          : "Failed to remove the value lock password.",
       );
       setNotice(null);
     } finally {
@@ -242,6 +319,77 @@ export default function ShareAccountModal({
                     >
                       {busyKey === "invite" ? "Sending..." : "Send Invite"}
                     </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {isOwner ? (
+            <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-white p-3 text-orange-700 shadow-sm">
+                  <Users size={18} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Value Lock Password
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Require this account-level password before balances and CSV
+                    exports can be revealed. Collaborators use the same password
+                    for this shared account.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <input
+                      type="password"
+                      value={valueLockPassword}
+                      onChange={(event) =>
+                        setValueLockPassword(event.target.value)
+                      }
+                      placeholder={
+                        hasValueLockPassword
+                          ? "Enter a new password"
+                          : "Create a password"
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
+                    />
+                    <input
+                      type="password"
+                      value={valueLockConfirmPassword}
+                      onChange={(event) =>
+                        setValueLockConfirmPassword(event.target.value)
+                      }
+                      placeholder="Confirm password"
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => void handleSaveValueLockPassword()}
+                      disabled={busyKey === "value-lock"}
+                      className="rounded-xl bg-[#2CA01C] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#248814] disabled:cursor-not-allowed disabled:bg-[#9FD792]"
+                    >
+                      {busyKey === "value-lock"
+                        ? "Saving..."
+                        : hasValueLockPassword
+                          ? "Update password"
+                          : "Save password"}
+                    </button>
+
+                    {hasValueLockPassword ? (
+                      <button
+                        onClick={() => void handleClearValueLockPassword()}
+                        disabled={busyKey === "clear-value-lock"}
+                        className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:text-gray-400"
+                      >
+                        {busyKey === "clear-value-lock"
+                          ? "Removing..."
+                          : "Remove password"}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>

@@ -27,6 +27,7 @@ import FireTracker from "./components/FireTracker";
 import CalculationsPage from "./components/CalculationsPage";
 import RetirementConfigModal from "./components/RetirementConfigModal";
 import ShareAccountModal from "./components/ShareAccountModal";
+import ValueUnlockModal from "./components/ValueUnlockModal";
 import {
   getStoredFireSnapshotPreference,
   getStoredSummarySnapshotPreference,
@@ -49,7 +50,8 @@ function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [showRetirementConfig, setShowRetirementConfig] = useState(false);
   const [showShareAccount, setShowShareAccount] = useState(false);
-  const [hideValues, setHideValues] = useState(false);
+  const [showValueUnlockModal, setShowValueUnlockModal] = useState(false);
+  const [hideValues, setHideValues] = useState(true);
   const [activePage, setActivePage] = useState<AppPage>("net-worth");
   const [activeDisplay, setActiveDisplay] =
     useState<NetWorthDisplay>("summary");
@@ -63,6 +65,7 @@ function App() {
   const [isSendingSignInEmail, setIsSendingSignInEmail] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [csvNotice, setCsvNotice] = useState<string | null>(null);
+  const [valueLockNotice, setValueLockNotice] = useState<string | null>(null);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -81,6 +84,8 @@ function App() {
     activeAccount,
     isOwnerOfActiveAccount,
     sharing,
+    hasValueLockPassword,
+    isValueLockStatusLoading,
     isLoading: isAccountLoading,
     error: accountError,
     setActiveAccountId,
@@ -89,6 +94,9 @@ function App() {
     inviteCollaborator,
     removeCollaborator,
     cancelInvitation,
+    saveActiveAccountValueLockPassword,
+    clearActiveAccountValueLock,
+    verifyActiveAccountValueLock,
   } = useAccountAccess(user);
 
   const {
@@ -113,6 +121,11 @@ function App() {
     setSummarySnapshotPreference(getStoredSummarySnapshotPreference(user?.id));
     setFireSnapshotPreference(getStoredFireSnapshotPreference(user?.id));
   }, [user?.id]);
+
+  useEffect(() => {
+    setHideValues(true);
+    setShowValueUnlockModal(false);
+  }, [activeAccountId, user?.id]);
 
   const updateSummarySnapshotPreference = (
     preference: FireSnapshotPreference,
@@ -226,8 +239,71 @@ function App() {
     setShowConfig(false);
     setShowRetirementConfig(false);
     setShowShareAccount(false);
+    setShowValueUnlockModal(false);
     setActivePage("net-worth");
+    setHideValues(true);
     setAuthNotice(null);
+    setValueLockNotice(null);
+  };
+
+  const handleShowValuesRequest = () => {
+    setValueLockNotice(null);
+
+    if (!hideValues) {
+      setHideValues(true);
+      setShowValueUnlockModal(false);
+      return;
+    }
+
+    if (isValueLockStatusLoading) {
+      return;
+    }
+
+    if (!hasValueLockPassword) {
+      if (isOwnerOfActiveAccount) {
+        setShowShareAccount(true);
+        void loadSharing();
+        setValueLockNotice(
+          "Set a value lock password in Shared Account before showing values.",
+        );
+      } else {
+        setValueLockNotice(
+          "The account owner must set a value lock password before values can be revealed.",
+        );
+      }
+
+      return;
+    }
+
+    setShowValueUnlockModal(true);
+  };
+
+  const handleUnlockValues = async (password: string) => {
+    const isValidPassword = await verifyActiveAccountValueLock(password);
+
+    if (!isValidPassword) {
+      throw new Error("Incorrect value lock password.");
+    }
+
+    setHideValues(false);
+    setValueLockNotice(null);
+  };
+
+  const handleSaveValueLockPassword = async (password: string) => {
+    await saveActiveAccountValueLockPassword(password);
+    setHideValues(true);
+    setValueLockNotice(
+      "Value lock password saved. Use Show Values to unlock this account.",
+    );
+  };
+
+  const handleClearValueLockPassword = async () => {
+    await clearActiveAccountValueLock();
+    setHideValues(true);
+    setShowValueUnlockModal(false);
+    setValueLockNotice(
+      "Value lock password removed. Set a new password before values can be revealed again.",
+    );
   };
 
   const latestSnapshot = getLatestSnapshot();
@@ -390,8 +466,9 @@ function App() {
 
           <div className="flex items-center gap-3 flex-wrap justify-end">
             <button
-              onClick={() => setHideValues((previous) => !previous)}
+              onClick={handleShowValuesRequest}
               aria-pressed={hideValues}
+              disabled={isValueLockStatusLoading}
               className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition-all ${
                 hideValues
                   ? "border-orange-200 bg-orange-50 text-orange-700 hover:border-orange-300 hover:bg-orange-100"
@@ -399,7 +476,15 @@ function App() {
               }`}
             >
               {hideValues ? <Eye size={15} /> : <EyeOff size={15} />}
-              {hideValues ? "Show Values" : "Hide Values"}
+              {isValueLockStatusLoading
+                ? "Checking..."
+                : hideValues
+                  ? hasValueLockPassword
+                    ? "Show Values"
+                    : isOwnerOfActiveAccount
+                      ? "Set Value Lock"
+                      : "Value Lock Required"
+                  : "Hide Values"}
             </button>
 
             {showAccountWorkspace ? (
@@ -578,6 +663,12 @@ function App() {
               </div>
             ) : null}
 
+            {valueLockNotice ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {valueLockNotice}
+              </div>
+            ) : null}
+
             {isLoading ? (
               <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center text-sm text-gray-500 shadow-sm">
                 Loading saved data...
@@ -686,11 +777,19 @@ function App() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
-                          onClick={handleExportCsv}
-                          className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
+                          onClick={() => {
+                            if (hideValues) {
+                              handleShowValuesRequest();
+                              return;
+                            }
+
+                            handleExportCsv();
+                          }}
+                          disabled={isValueLockStatusLoading}
+                          className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <Download size={15} />
-                          Export CSV
+                          {hideValues ? "Unlock to export" : "Export CSV"}
                         </button>
                         <button
                           onClick={() => importInputRef.current?.click()}
@@ -759,15 +858,26 @@ function App() {
       {showShareAccount && activeAccount ? (
         <ShareAccountModal
           accountName={activeAccount.accountName}
+          hasValueLockPassword={hasValueLockPassword}
           isOwner={isOwnerOfActiveAccount}
           collaborators={sharing.collaborators}
           invitations={sharing.invitations}
           isLoading={sharing.isLoading}
           onRenameAccount={renameActiveAccount}
+          onSaveValueLockPassword={handleSaveValueLockPassword}
+          onClearValueLockPassword={handleClearValueLockPassword}
           onInvite={inviteCollaborator}
           onRemoveCollaborator={removeCollaborator}
           onCancelInvitation={cancelInvitation}
           onClose={() => setShowShareAccount(false)}
+        />
+      ) : null}
+
+      {showValueUnlockModal && activeAccount ? (
+        <ValueUnlockModal
+          accountName={activeAccount.accountName}
+          onUnlock={handleUnlockValues}
+          onClose={() => setShowValueUnlockModal(false)}
         />
       ) : null}
     </div>
