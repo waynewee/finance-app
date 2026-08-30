@@ -4,8 +4,11 @@ import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 interface Props {
   hasValueLockPassword: boolean;
-  onSaveValueLockPassword: (password: string) => Promise<void>;
-  onClearValueLockPassword: () => Promise<void>;
+  onSaveValueLockPassword: (
+    password: string,
+    currentPassword?: string,
+  ) => Promise<void>;
+  onClearValueLockPassword: (currentPassword?: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -17,6 +20,7 @@ export default function ValueLockSettingsModal({
 }: Props) {
   useBodyScrollLock(true);
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -24,8 +28,15 @@ export default function ValueLockSettingsModal({
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const handleSave = async () => {
+    const normalizedCurrentPassword = currentPassword.trim();
     const normalizedPassword = password.trim();
     const normalizedConfirmation = confirmPassword.trim();
+
+    if (hasValueLockPassword && !normalizedCurrentPassword) {
+      setError("Enter your current password.");
+      setNotice(null);
+      return;
+    }
 
     if (normalizedPassword.length < 8) {
       setError("Value lock passwords must be at least 8 characters.");
@@ -42,7 +53,8 @@ export default function ValueLockSettingsModal({
     setBusyKey("save");
 
     try {
-      await onSaveValueLockPassword(normalizedPassword);
+      await onSaveValueLockPassword(normalizedPassword, normalizedCurrentPassword);
+      setCurrentPassword("");
       setPassword("");
       setConfirmPassword("");
       setNotice(
@@ -64,10 +76,19 @@ export default function ValueLockSettingsModal({
   };
 
   const handleClear = async () => {
+    const normalizedCurrentPassword = currentPassword.trim();
+
+    if (hasValueLockPassword && !normalizedCurrentPassword) {
+      setError("Enter your current password.");
+      setNotice(null);
+      return;
+    }
+
     setBusyKey("clear");
 
     try {
-      await onClearValueLockPassword();
+      await onClearValueLockPassword(normalizedCurrentPassword);
+      setCurrentPassword("");
       setPassword("");
       setConfirmPassword("");
       setNotice(
@@ -85,6 +106,7 @@ export default function ValueLockSettingsModal({
       setBusyKey(null);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 px-4 py-4 backdrop-blur-sm sm:items-center">
@@ -107,6 +129,21 @@ export default function ValueLockSettingsModal({
         </div>
 
         <div className="space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
+          {hasValueLockPassword ? (
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Current password
+              </span>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="Enter current password"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
+              />
+            </label>
+          ) : null}
+
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">
               New password

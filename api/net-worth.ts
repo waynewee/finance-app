@@ -43,14 +43,12 @@ async function handleGet(res: VercelResponse) {
       sql`select * from fire_settings where id = 'primary'`,
     ]);
 
-  res
-    .status(200)
-    .json({
-      categoryRows,
-      subcategoryRows,
-      monthlyRows,
-      fireSettingsRow: fireSettingsRows[0] ?? null,
-    });
+  res.status(200).json({
+    categoryRows,
+    subcategoryRows,
+    monthlyRows,
+    fireSettingsRow: fireSettingsRows[0] ?? null,
+  });
 }
 
 async function handleReplaceCategories(

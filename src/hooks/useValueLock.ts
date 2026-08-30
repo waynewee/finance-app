@@ -34,14 +34,17 @@ export function useValueLock() {
     void refreshValueLockStatus();
   }, [refreshValueLockStatus]);
 
-  const saveValueLockPassword = useCallback(async (password: string) => {
-    await setValueLockPassword(password);
-    setHasValueLockPassword(true);
-    setError(null);
-  }, []);
+  const saveValueLockPassword = useCallback(
+    async (password: string, currentPassword?: string) => {
+      await setValueLockPassword(password, currentPassword);
+      setHasValueLockPassword(true);
+      setError(null);
+    },
+    [],
+  );
 
-  const clearValueLock = useCallback(async () => {
-    await clearValueLockPassword();
+  const clearValueLock = useCallback(async (currentPassword?: string) => {
+    await clearValueLockPassword(currentPassword);
     setHasValueLockPassword(false);
     setError(null);
   }, []);

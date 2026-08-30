@@ -1,7 +1,6 @@
 import { DEFAULT_FIRE_SETTINGS, type FireSettings } from "./netWorthRepository";
 import {
   calculateRetirementProjection,
-  sanitizeRetirementSystemConfig,
   type RetirementBalancePeriod,
   type RetirementProjectionResult,
   type RetirementSystemConfig,
@@ -272,7 +271,9 @@ export function sanitizeFireSettings(settings: FireSettings): FireSettings {
       settings.retirementContributionStopAge <= 0
         ? null
         : settings.retirementContributionStopAge,
-    retirementSystem: sanitizeRetirementSystemConfig(settings.retirementSystem),
+    // Retirement system considerations have been removed from FIRE
+    // calculations; FIRE math now only uses the net worth total.
+    retirementSystem: null,
   };
 }
 
