@@ -59,7 +59,14 @@ async function main() {
           sort_order = excluded.sort_order,
           updated_at = excluded.updated_at
       `,
-      mapRow: (r) => [r.id, r.name, r.archived, r.sort_order, r.created_at, r.updated_at],
+      mapRow: (r) => [
+        r.id,
+        r.name,
+        r.archived,
+        r.sort_order,
+        r.created_at,
+        r.updated_at,
+      ],
     });
 
     await copyTable({
@@ -174,7 +181,13 @@ async function main() {
           sort_order = excluded.sort_order,
           updated_at = excluded.updated_at
       `,
-      mapRow: (r) => [r.id, r.name, r.current_value, r.sort_order, r.updated_at],
+      mapRow: (r) => [
+        r.id,
+        r.name,
+        r.current_value,
+        r.sort_order,
+        r.updated_at,
+      ],
     });
 
     await copyTable({
@@ -234,7 +247,12 @@ async function main() {
           rebalance_mode = excluded.rebalance_mode,
           updated_at = excluded.updated_at
       `,
-      mapRow: (r) => ["primary", r.monthly_investment_amount, r.rebalance_mode, r.updated_at],
+      mapRow: (r) => [
+        "primary",
+        r.monthly_investment_amount,
+        r.rebalance_mode,
+        r.updated_at,
+      ],
     });
 
     await copyTable({
@@ -270,7 +288,12 @@ async function main() {
           target_percentage = excluded.target_percentage,
           updated_at = excluded.updated_at
       `,
-      mapRow: (r) => [r.profile_id, r.category_id, r.target_percentage, r.updated_at],
+      mapRow: (r) => [
+        r.profile_id,
+        r.category_id,
+        r.target_percentage,
+        r.updated_at,
+      ],
     });
 
     // The old password hash is a standard bcrypt hash (pgcrypto's crypt() with

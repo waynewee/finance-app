@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { sql } from "./_lib/db";
-import { readJsonBody, sendError } from "./_lib/http";
+import { sql } from "./_lib/db.js";
+import { readJsonBody, sendError } from "./_lib/http.js";
 
 async function handleStatus(res: VercelResponse) {
   const rows = await sql`select 1 from value_lock where id = true`;

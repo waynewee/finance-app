@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { sql } from "./_lib/db";
-import { readJsonBody, sendError } from "./_lib/http";
+import { sql } from "./_lib/db.js";
+import { readJsonBody, sendError } from "./_lib/http.js";
 
 interface HoldingInput {
   id: string;
