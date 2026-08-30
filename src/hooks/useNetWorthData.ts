@@ -81,7 +81,7 @@ function getSortedSnapshots(
   return snapshots;
 }
 
-export function useNetWorthData(accountUserId: string | null) {
+export function useNetWorthData() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthlyData>({});
   const [fireSettings, setFireSettings] = useState<FireSettings>(
@@ -111,10 +111,6 @@ export function useNetWorthData(accountUserId: string | null) {
       monthlyData?: MonthlyData;
       fireSettings?: FireSettings;
     }) => {
-      if (!accountUserId) {
-        return;
-      }
-
       const cachedCategories = nextState.categories ?? categoriesRef.current;
       const cachedMonthlyData = nextState.monthlyData ?? monthlyDataRef.current;
       const cachedFireSettings =
@@ -124,33 +120,19 @@ export function useNetWorthData(accountUserId: string | null) {
       monthlyDataRef.current = cachedMonthlyData;
       fireSettingsRef.current = cachedFireSettings;
 
-      cacheNetWorthState(accountUserId, {
+      cacheNetWorthState({
         categories: cachedCategories,
         monthlyData: cachedMonthlyData,
         fireSettings: cachedFireSettings,
       });
     },
-    [accountUserId],
+    [],
   );
 
   useEffect(() => {
     let isMounted = true;
 
-    if (!accountUserId) {
-      setCategories([]);
-      setMonthlyData({});
-      setFireSettings(DEFAULT_FIRE_SETTINGS);
-      setError(null);
-      setIsLoading(false);
-      categoriesRef.current = [];
-      monthlyDataRef.current = {};
-      fireSettingsRef.current = DEFAULT_FIRE_SETTINGS;
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    const cachedState = getCachedNetWorthState(accountUserId);
+    const cachedState = getCachedNetWorthState();
     if (cachedState) {
       const normalizedCategories = normalizeCategories(cachedState.categories);
 
@@ -167,7 +149,7 @@ export function useNetWorthData(accountUserId: string | null) {
 
     const hydrate = async () => {
       try {
-        const state = await loadNetWorthState(accountUserId);
+        const state = await loadNetWorthState();
         if (!isMounted) {
           return;
         }
@@ -201,7 +183,7 @@ export function useNetWorthData(accountUserId: string | null) {
     return () => {
       isMounted = false;
     };
-  }, [accountUserId, syncCachedState]);
+  }, [syncCachedState]);
 
   const getValue = useCallback(
     (year: number, monthIndex: number, subcategoryId: string): number => {
@@ -217,10 +199,6 @@ export function useNetWorthData(accountUserId: string | null) {
       subcategoryId: string,
       value: number,
     ) => {
-      if (!accountUserId) {
-        return;
-      }
-
       setMonthlyData((prev) => {
         const next = {
           ...prev,
@@ -236,21 +214,17 @@ export function useNetWorthData(accountUserId: string | null) {
         return next;
       });
 
-      void saveMonthlyValue(
-        accountUserId,
-        year,
-        monthIndex,
-        subcategoryId,
-        value,
-      ).catch((saveError) => {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to save value.",
-        );
-      });
+      void saveMonthlyValue(year, monthIndex, subcategoryId, value).catch(
+        (saveError) => {
+          setError(
+            saveError instanceof Error
+              ? saveError.message
+              : "Failed to save value.",
+          );
+        },
+      );
     },
-    [accountUserId],
+    [],
   );
 
   const getMonthTotal = useCallback(
@@ -298,54 +272,34 @@ export function useNetWorthData(accountUserId: string | null) {
     return getSortedSnapshots(categories, monthlyData);
   }, [categories, monthlyData]);
 
-  const updateCategories = useCallback(
-    (updated: Category[]) => {
-      if (!accountUserId) {
-        return;
-      }
+  const updateCategories = useCallback((updated: Category[]) => {
+    const normalizedCategories = normalizeCategories(updated);
 
-      const normalizedCategories = normalizeCategories(updated);
-
-      setCategories(normalizedCategories);
-      syncCachedState({ categories: normalizedCategories });
-      void replaceCategories(accountUserId, normalizedCategories).catch(
-        (saveError) => {
-          setError(
-            saveError instanceof Error
-              ? saveError.message
-              : "Failed to save categories.",
-          );
-        },
+    setCategories(normalizedCategories);
+    syncCachedState({ categories: normalizedCategories });
+    void replaceCategories(normalizedCategories).catch((saveError) => {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to save categories.",
       );
-    },
-    [accountUserId],
-  );
+    });
+  }, []);
 
-  const updateFireSettings = useCallback(
-    (updated: FireSettings) => {
-      if (!accountUserId) {
-        return;
-      }
-
-      setFireSettings(updated);
-      syncCachedState({ fireSettings: updated });
-      void saveFireSettings(accountUserId, updated).catch((saveError) => {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to save FIRE settings.",
-        );
-      });
-    },
-    [accountUserId],
-  );
+  const updateFireSettings = useCallback((updated: FireSettings) => {
+    setFireSettings(updated);
+    syncCachedState({ fireSettings: updated });
+    void saveFireSettings(updated).catch((saveError) => {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to save FIRE settings.",
+      );
+    });
+  }, []);
 
   const replaceYearData = useCallback(
     async (year: number, valuesBySubcategory: Record<string, number[]>) => {
-      if (!accountUserId) {
-        return;
-      }
-
       const nextYearData = Object.entries(valuesBySubcategory).reduce<
         MonthlyData[string]
       >((result, [subcategoryId, values]) => {
@@ -376,11 +330,7 @@ export function useNetWorthData(accountUserId: string | null) {
       setError(null);
 
       try {
-        await replaceYearMonthlyValues(
-          accountUserId,
-          year,
-          valuesBySubcategory,
-        );
+        await replaceYearMonthlyValues(year, valuesBySubcategory);
       } catch (saveError) {
         setMonthlyData((prev) => ({
           ...prev,
@@ -400,7 +350,7 @@ export function useNetWorthData(accountUserId: string | null) {
         throw saveError;
       }
     },
-    [accountUserId, monthlyData],
+    [monthlyData],
   );
 
   return {

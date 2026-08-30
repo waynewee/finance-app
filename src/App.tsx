@@ -1,22 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Calculator,
   FileText,
   Download,
-  LogOut,
-  Mail,
+  Lock,
   Settings,
   ChevronLeft,
   ChevronRight,
   Upload,
-  Users,
   Flame,
   TrendingUp,
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useAccountAccess } from "./hooks/useAccountAccess";
-import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
+import { useValueLock } from "./hooks/useValueLock";
 import { useNetWorthData } from "./hooks/useNetWorthData";
 import NetWorthTable from "./components/NetWorthTable";
 import NetWorthChart from "./components/NetWorthChart";
@@ -26,7 +23,7 @@ import InvestmentPlannerPage from "./components/InvestmentPlannerPage";
 import FireTracker from "./components/FireTracker";
 import CalculationsPage from "./components/CalculationsPage";
 import RetirementConfigModal from "./components/RetirementConfigModal";
-import ShareAccountModal from "./components/ShareAccountModal";
+import ValueLockSettingsModal from "./components/ValueLockSettingsModal";
 import ValueUnlockModal from "./components/ValueUnlockModal";
 import {
   getStoredFireSnapshotPreference,
@@ -49,55 +46,33 @@ function App() {
   const [tableYear, setTableYear] = useState(currentYear);
   const [showConfig, setShowConfig] = useState(false);
   const [showRetirementConfig, setShowRetirementConfig] = useState(false);
-  const [showShareAccount, setShowShareAccount] = useState(false);
+  const [showValueLockSettings, setShowValueLockSettings] = useState(false);
   const [showValueUnlockModal, setShowValueUnlockModal] = useState(false);
   const [hideValues, setHideValues] = useState(true);
   const [activePage, setActivePage] = useState<AppPage>("net-worth");
   const [activeDisplay, setActiveDisplay] =
     useState<NetWorthDisplay>("summary");
   const [summarySnapshotPreference, setSummarySnapshotPreference] =
-    useState<FireSnapshotPreference>("current");
+    useState<FireSnapshotPreference>(
+      getStoredSummarySnapshotPreference(undefined),
+    );
   const [fireSnapshotPreference, setFireSnapshotPreference] =
-    useState<FireSnapshotPreference>("current");
-  const [email, setEmail] = useState("");
-  const [emailOtp, setEmailOtp] = useState("");
-  const [authNotice, setAuthNotice] = useState<string | null>(null);
-  const [isSendingSignInEmail, setIsSendingSignInEmail] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+    useState<FireSnapshotPreference>(
+      getStoredFireSnapshotPreference(undefined),
+    );
   const [csvNotice, setCsvNotice] = useState<string | null>(null);
   const [valueLockNotice, setValueLockNotice] = useState<string | null>(null);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
-    user,
-    isLoading: isAuthLoading,
-    error: authError,
-    sendSignInEmail,
-    verifyEmailOtp,
-    signOut,
-  } = useSupabaseAuth();
-
-  const {
-    accounts,
-    activeAccountId,
-    activeAccount,
-    isOwnerOfActiveAccount,
-    sharing,
     hasValueLockPassword,
     isValueLockStatusLoading,
-    isLoading: isAccountLoading,
-    error: accountError,
-    setActiveAccountId,
-    loadSharing,
-    renameActiveAccount,
-    inviteCollaborator,
-    removeCollaborator,
-    cancelInvitation,
-    saveActiveAccountValueLockPassword,
-    clearActiveAccountValueLock,
-    verifyActiveAccountValueLock,
-  } = useAccountAccess(user);
+    error: valueLockError,
+    saveValueLockPassword,
+    clearValueLock,
+    verifyValueLock,
+  } = useValueLock();
 
   const {
     categories,
@@ -115,28 +90,18 @@ function App() {
     updateCategories,
     updateFireSettings,
     replaceYearData,
-  } = useNetWorthData(activeAccountId);
-
-  useEffect(() => {
-    setSummarySnapshotPreference(getStoredSummarySnapshotPreference(user?.id));
-    setFireSnapshotPreference(getStoredFireSnapshotPreference(user?.id));
-  }, [user?.id]);
-
-  useEffect(() => {
-    setHideValues(true);
-    setShowValueUnlockModal(false);
-  }, [activeAccountId, user?.id]);
+  } = useNetWorthData();
 
   const updateSummarySnapshotPreference = (
     preference: FireSnapshotPreference,
   ) => {
     setSummarySnapshotPreference(preference);
-    setStoredSummarySnapshotPreference(user?.id, preference);
+    setStoredSummarySnapshotPreference(undefined, preference);
   };
 
   const updateFireSnapshotPreference = (preference: FireSnapshotPreference) => {
     setFireSnapshotPreference(preference);
-    setStoredFireSnapshotPreference(user?.id, preference);
+    setStoredFireSnapshotPreference(undefined, preference);
   };
 
   const downloadCsvFile = (fileName: string, content: string) => {
@@ -186,66 +151,6 @@ function App() {
     }
   };
 
-  const handleSendSignInEmail = async () => {
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setAuthNotice("Enter your email address to receive a sign-in code.");
-      return;
-    }
-
-    setIsSendingSignInEmail(true);
-
-    try {
-      await sendSignInEmail(trimmedEmail);
-      setAuthNotice(
-        `Sign-in email sent to ${trimmedEmail}. Enter the code from that email to sign in.`,
-      );
-    } catch {
-      setAuthNotice(null);
-    } finally {
-      setIsSendingSignInEmail(false);
-    }
-  };
-
-  const handleVerifyEmailOtp = async () => {
-    const trimmedEmail = email.trim();
-    const trimmedOtp = emailOtp.trim();
-
-    if (!trimmedEmail) {
-      setAuthNotice("Enter your email address before verifying the code.");
-      return;
-    }
-
-    if (!trimmedOtp) {
-      setAuthNotice("Enter the sign-in code from your email.");
-      return;
-    }
-
-    setIsVerifyingOtp(true);
-
-    try {
-      await verifyEmailOtp(trimmedEmail, trimmedOtp);
-      setAuthNotice("Code accepted. Loading your account...");
-      setEmailOtp("");
-    } catch {
-      setAuthNotice(null);
-    } finally {
-      setIsVerifyingOtp(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    setShowConfig(false);
-    setShowRetirementConfig(false);
-    setShowShareAccount(false);
-    setShowValueUnlockModal(false);
-    setActivePage("net-worth");
-    setHideValues(true);
-    setAuthNotice(null);
-    setValueLockNotice(null);
-  };
-
   const handleShowValuesRequest = () => {
     setValueLockNotice(null);
 
@@ -260,18 +165,8 @@ function App() {
     }
 
     if (!hasValueLockPassword) {
-      if (isOwnerOfActiveAccount) {
-        setShowShareAccount(true);
-        void loadSharing();
-        setValueLockNotice(
-          "Set a value lock password in Shared Account before showing values.",
-        );
-      } else {
-        setValueLockNotice(
-          "The account owner must set a value lock password before values can be revealed.",
-        );
-      }
-
+      setShowValueLockSettings(true);
+      setValueLockNotice("Set a value lock password before showing values.");
       return;
     }
 
@@ -279,7 +174,7 @@ function App() {
   };
 
   const handleUnlockValues = async (password: string) => {
-    const isValidPassword = await verifyActiveAccountValueLock(password);
+    const isValidPassword = await verifyValueLock(password);
 
     if (!isValidPassword) {
       throw new Error("Incorrect value lock password.");
@@ -290,15 +185,13 @@ function App() {
   };
 
   const handleSaveValueLockPassword = async (password: string) => {
-    await saveActiveAccountValueLockPassword(password);
+    await saveValueLockPassword(password);
     setHideValues(true);
-    setValueLockNotice(
-      "Value lock password saved. Use Show Values to unlock this account.",
-    );
+    setValueLockNotice("Value lock password saved. Use Show Values to unlock.");
   };
 
   const handleClearValueLockPassword = async () => {
-    await clearActiveAccountValueLock();
+    await clearValueLock();
     setHideValues(true);
     setShowValueUnlockModal(false);
     setValueLockNotice(
@@ -314,7 +207,6 @@ function App() {
     fireSnapshotPreference === "previous" && previousSnapshot
       ? previousSnapshot
       : latestSnapshot;
-  const showAccountWorkspace = activePage !== "investment-planner";
   const displayOptions: Array<{
     id: NetWorthDisplay;
     label: string;
@@ -335,105 +227,11 @@ function App() {
     (display) => display.id === activeDisplay,
   );
 
-  if (isAuthLoading || (user && isAccountLoading)) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6 bg-[var(--qb-green-muted)]">
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <p className="text-sm text-gray-500">
-            {isAuthLoading
-              ? "Checking your session..."
-              : "Loading your shared account access..."}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-6 bg-[var(--qb-green-muted)]">
-        <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-red-500 p-3 shadow-sm">
-              <Flame size={22} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Time to FIRE</h1>
-              <p className="text-sm text-gray-500">
-                Sign in with your email code
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">
-                Email
-              </span>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void handleSendSignInEmail();
-                  }
-                }}
-                placeholder="you@example.com"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
-              />
-            </label>
-
-            <button
-              onClick={() => void handleSendSignInEmail()}
-              disabled={isSendingSignInEmail}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2CA01C] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#248814] disabled:cursor-not-allowed disabled:bg-[#9FD792]"
-            >
-              <Mail size={16} />
-              {isSendingSignInEmail ? "Sending OTP..." : "Email OTP"}
-            </button>
-
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
-              <p className="text-sm font-medium text-gray-800">
-                Enter your OTP
-              </p>
-
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={emailOtp}
-                onChange={(event) => setEmailOtp(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void handleVerifyEmailOtp();
-                  }
-                }}
-                placeholder="8-digit OTP"
-                className="mt-3 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
-              />
-
-              <button
-                onClick={() => void handleVerifyEmailOtp()}
-                disabled={isVerifyingOtp}
-                className="mt-3 flex w-full items-center justify-center rounded-xl border border-[#2CA01C] px-4 py-3 text-sm font-medium text-[#1E7A18] transition-colors hover:bg-[#EEF9EA] disabled:cursor-not-allowed disabled:border-[#9FD792] disabled:text-[#7FBF76]"
-              >
-                {isVerifyingOtp ? "Checking OTP..." : "Confirm"}
-              </button>
-            </div>
-          </div>
-
-          {authNotice ? (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              {authNotice}
-            </div>
-          ) : null}
-
-          {authError ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {authError}
-            </div>
-          ) : null}
+          <p className="text-sm text-gray-500">Loading your data...</p>
         </div>
       </div>
     );
@@ -453,13 +251,7 @@ function App() {
                 Time to FIRE
               </h1>
               <p className="text-xs text-gray-500">
-                {activeAccount
-                  ? `${activeAccount.accountName}${
-                      activeAccount.role === "collaborator"
-                        ? " · shared with you"
-                        : ""
-                    }`
-                  : "Track your financial journey"}
+                Track your financial journey
               </p>
             </div>
           </div>
@@ -481,31 +273,16 @@ function App() {
                 : hideValues
                   ? hasValueLockPassword
                     ? "Show Values"
-                    : isOwnerOfActiveAccount
-                      ? "Set Value Lock"
-                      : "Value Lock Required"
+                    : "Set Value Lock"
                   : "Hide Values"}
             </button>
 
-            {showAccountWorkspace ? (
-              <button
-                onClick={() => {
-                  setShowShareAccount(true);
-                  void loadSharing();
-                }}
-                className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
-              >
-                <Users size={15} />
-                Sharing
-              </button>
-            ) : null}
-
             <button
-              onClick={() => void handleSignOut()}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all"
+              onClick={() => setShowValueLockSettings(true)}
+              className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-all hover:border-[#9FD792] hover:bg-[#EEF9EA] hover:text-[#1E7A18]"
             >
-              <LogOut size={15} />
-              Sign Out
+              <Lock size={15} />
+              Value Lock
             </button>
           </div>
         </div>
@@ -521,40 +298,14 @@ function App() {
                   Workspace
                 </p>
                 <h2 className="mt-2 text-lg font-semibold text-gray-900">
-                  Account & Views
+                  Views
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Keep your active account and planner mode pinned on the left.
+                  Keep your planner mode pinned on the left.
                 </p>
               </div>
 
               <div className="mt-5 space-y-5">
-                {accounts.length > 0 ? (
-                  <label className="block">
-                    <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Account
-                    </span>
-                    <select
-                      value={activeAccountId ?? ""}
-                      onChange={(event) =>
-                        setActiveAccountId(event.target.value)
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-[#2CA01C] focus:ring-2 focus:ring-[#2CA01C]/15"
-                    >
-                      {accounts.map((account) => (
-                        <option key={account.userId} value={account.userId}>
-                          {account.accountName}
-                          {account.role === "collaborator" ? " (shared)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500">
-                    No accounts available yet.
-                  </div>
-                )}
-
                 <div>
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
                     Mode
@@ -657,9 +408,9 @@ function App() {
               </div>
             ) : null}
 
-            {accountError ? (
+            {valueLockError ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {accountError}
+                {valueLockError}
               </div>
             ) : null}
 
@@ -742,7 +493,6 @@ function App() {
                   <CalculationsPage />
                 ) : (
                   <InvestmentPlannerPage
-                    accountUserId={activeAccountId ?? user.id}
                     hideValues={hideValues}
                     fireSettings={fireSettings}
                   />
@@ -855,27 +605,17 @@ function App() {
         />
       )}
 
-      {showShareAccount && activeAccount ? (
-        <ShareAccountModal
-          accountName={activeAccount.accountName}
+      {showValueLockSettings ? (
+        <ValueLockSettingsModal
           hasValueLockPassword={hasValueLockPassword}
-          isOwner={isOwnerOfActiveAccount}
-          collaborators={sharing.collaborators}
-          invitations={sharing.invitations}
-          isLoading={sharing.isLoading}
-          onRenameAccount={renameActiveAccount}
           onSaveValueLockPassword={handleSaveValueLockPassword}
           onClearValueLockPassword={handleClearValueLockPassword}
-          onInvite={inviteCollaborator}
-          onRemoveCollaborator={removeCollaborator}
-          onCancelInvitation={cancelInvitation}
-          onClose={() => setShowShareAccount(false)}
+          onClose={() => setShowValueLockSettings(false)}
         />
       ) : null}
 
-      {showValueUnlockModal && activeAccount ? (
+      {showValueUnlockModal ? (
         <ValueUnlockModal
-          accountName={activeAccount.accountName}
           onUnlock={handleUnlockValues}
           onClose={() => setShowValueUnlockModal(false)}
         />

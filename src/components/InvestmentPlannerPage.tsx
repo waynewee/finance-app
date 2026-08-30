@@ -31,7 +31,6 @@ import { type FireSettings } from "../lib/netWorthRepository";
 import { maskDisplayValue, maskInlineNumbers } from "../lib/valueMasking";
 
 interface Props {
-  accountUserId: string;
   hideValues: boolean;
   fireSettings: FireSettings;
 }
@@ -192,12 +191,10 @@ function getNoticeClassName(tone: NoticeTone): string {
 }
 
 export default function InvestmentPlannerPage({
-  accountUserId,
   hideValues,
   fireSettings,
 }: Props) {
-  const { plan, isLoading, error, savePlan } =
-    useInvestmentPlanner(accountUserId);
+  const { plan, isLoading, error, savePlan } = useInvestmentPlanner();
   const [draftPlan, setDraftPlan] = useState<InvestmentPlannerData>(
     getDefaultInvestmentPlannerData(),
   );

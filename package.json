@@ -10,7 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.99.2",
+    "@neondatabase/serverless": "^0.10.4",
+    "bcryptjs": "^2.4.3",
     "chart.js": "^4.5.1",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
@@ -23,9 +24,11 @@
     "@rolldown/plugin-babel": "^0.2.0",
     "@tailwindcss/vite": "^4.2.1",
     "@types/babel__core": "^7.20.5",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vercel/node": "^3.2.0",
     "@vitejs/plugin-react": "^6.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.4",

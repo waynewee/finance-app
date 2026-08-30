@@ -1,1 +1,3 @@
-When running `npm run dev`, always make sure the port at 5173 (default) is not being used. If used, kill the process using that port and restart the development server.
+This app now uses Neon Postgres via Vercel serverless functions in `api/*.ts`. Local development MUST use `vercel dev` (not plain `npm run dev`/`vite`), because plain Vite does not serve the `/api/*` routes the frontend depends on for all data access.
+
+When running `vercel dev --yes --listen 5173`, always make sure port 5173 is not being used first (kill the process using it if needed). Also export `DATABASE_URL` as a shell-level environment variable before starting `vercel dev` (e.g. `$env:DATABASE_URL = "..."` in PowerShell) — relying solely on `.env.local` for the serverless function runtime has been unreliable on this machine and causes "Missing DATABASE_URL environment variable" errors from `api/_lib/db.ts`.

@@ -4,7 +4,7 @@ import {
   type Category,
 } from "../data/defaultCategories";
 import type { RetirementSystemConfig } from "./retirementSystem";
-import { supabase } from "./supabase";
+import { apiGet, apiPatch } from "./apiClient";
 
 export type FireTimeToFireAlgorithm = "ttm";
 
@@ -58,7 +58,6 @@ export interface NetWorthState {
 }
 
 interface CategoryRow {
-  user_id: string;
   id: string;
   name: string;
   archived: boolean | null;
@@ -66,7 +65,6 @@ interface CategoryRow {
 }
 
 interface SubcategoryRow {
-  user_id: string;
   id: string;
   category_id: string;
   name: string;
@@ -76,41 +74,33 @@ interface SubcategoryRow {
 }
 
 interface MonthlyValueRow {
-  user_id: string;
   year: number;
   month: number;
   subcategory_id: string;
-  value: number;
-  updated_at: string;
+  value: number | string;
 }
 
 interface FireSettingsRow {
-  user_id: string;
-  id: string;
-  annual_spending_goal: number;
-  pre_fire_annual_spending?: number | null;
-  withdrawal_rate: number;
-  expected_annual_return: number;
+  annual_spending_goal: number | string;
+  pre_fire_annual_spending?: number | string | null;
+  withdrawal_rate: number | string;
+  expected_annual_return: number | string;
   time_to_fire_algorithm?: string | null;
-  annual_bonus_amount?: number | null;
-  non_recurring_bonus_amount?: number | null;
-  job_loss_monthly_savings_reduction?: number | null;
+  annual_bonus_amount?: number | string | null;
+  non_recurring_bonus_amount?: number | string | null;
+  job_loss_monthly_savings_reduction?: number | string | null;
   job_loss_monthly_savings_reduction_months?: number | null;
   annual_bonus_month_added?: string | null;
   non_recurring_bonus_month_added?: string | null;
-  monthly_contribution: number;
-  monthly_income?: number | null;
   retirement_system?: RetirementSystemConfig | null;
   current_age?: number | null;
   date_of_birth?: string | null;
   target_fire_age: number | null;
   predicted_death_age?: number | null;
   contribution_stop_age?: number | null;
-  updated_at: string;
 }
 
-const FIRE_SETTINGS_ROW_ID = "primary";
-const NET_WORTH_STATE_CACHE_PREFIX = "finance_app_net_worth_state";
+const NET_WORTH_STATE_CACHE_KEY = "finance_app_net_worth_state";
 const NET_WORTH_STATE_CACHE_VERSION = 3;
 
 interface CachedNetWorthState {
@@ -119,7 +109,7 @@ interface CachedNetWorthState {
   state: NetWorthState;
 }
 
-const inMemoryNetWorthStateCache = new Map<string, CachedNetWorthState>();
+let inMemoryNetWorthStateCache: CachedNetWorthState | null = null;
 
 function inferDateOfBirthFromCurrentAge(
   currentAge: number | null | undefined,
@@ -141,14 +131,16 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     row.time_to_fire_algorithm === "ttm" ? "ttm" : "ttm";
 
   return {
-    annualSpendingGoal: row.annual_spending_goal,
-    preFireAnnualSpending: row.pre_fire_annual_spending ?? 0,
-    withdrawalRate: row.withdrawal_rate,
-    expectedAnnualReturn: row.expected_annual_return,
+    annualSpendingGoal: Number(row.annual_spending_goal),
+    preFireAnnualSpending: Number(row.pre_fire_annual_spending ?? 0),
+    withdrawalRate: Number(row.withdrawal_rate),
+    expectedAnnualReturn: Number(row.expected_annual_return),
     timeToFireAlgorithm,
-    annualBonusAmount: row.annual_bonus_amount ?? 0,
-    nonRecurringBonusAmount: row.non_recurring_bonus_amount ?? 0,
-    jobLossMonthlySavingsReduction: row.job_loss_monthly_savings_reduction ?? 0,
+    annualBonusAmount: Number(row.annual_bonus_amount ?? 0),
+    nonRecurringBonusAmount: Number(row.non_recurring_bonus_amount ?? 0),
+    jobLossMonthlySavingsReduction: Number(
+      row.job_loss_monthly_savings_reduction ?? 0,
+    ),
     jobLossMonthlySavingsReductionMonths:
       row.job_loss_monthly_savings_reduction_months == null
         ? null
@@ -169,41 +161,6 @@ function mapFireSettingsRow(row?: FireSettingsRow | null): FireSettings {
     retirementContributionStopAge:
       row.contribution_stop_age ?? row.target_fire_age,
     retirementSystem: row.retirement_system ?? null,
-  };
-}
-
-function mapFireSettingsToRow(
-  userId: string,
-  settings: FireSettings,
-): FireSettingsRow {
-  return {
-    user_id: userId,
-    id: FIRE_SETTINGS_ROW_ID,
-    annual_spending_goal: settings.annualSpendingGoal,
-    pre_fire_annual_spending: settings.preFireAnnualSpending,
-    withdrawal_rate: settings.withdrawalRate,
-    expected_annual_return: settings.expectedAnnualReturn,
-    time_to_fire_algorithm: settings.timeToFireAlgorithm,
-    annual_bonus_amount: settings.annualBonusAmount,
-    non_recurring_bonus_amount: settings.nonRecurringBonusAmount,
-    job_loss_monthly_savings_reduction: settings.jobLossMonthlySavingsReduction,
-    job_loss_monthly_savings_reduction_months:
-      settings.jobLossMonthlySavingsReductionMonths,
-    annual_bonus_month_added: settings.annualBonusMonthAdded
-      ? `${settings.annualBonusMonthAdded}-01`
-      : null,
-    non_recurring_bonus_month_added: settings.nonRecurringBonusMonthAdded
-      ? `${settings.nonRecurringBonusMonthAdded}-01`
-      : null,
-    monthly_contribution: 0,
-    monthly_income: 0,
-    retirement_system: settings.retirementSystem,
-    current_age: null,
-    date_of_birth: settings.dateOfBirth,
-    target_fire_age: settings.targetFireAge,
-    predicted_death_age: settings.predictedDeathAge,
-    contribution_stop_age: settings.retirementContributionStopAge,
-    updated_at: new Date().toISOString(),
   };
 }
 
@@ -236,87 +193,52 @@ function buildMonthlyData(rows: MonthlyValueRow[]): MonthlyData {
     const yearKey = String(row.year);
     result[yearKey] ??= {};
     result[yearKey][row.month] ??= {};
-    result[yearKey][row.month][row.subcategory_id] = row.value;
+    result[yearKey][row.month][row.subcategory_id] = Number(row.value);
     return result;
   }, {});
 }
 
-async function seedDefaultCategoriesIfNeeded(userId: string): Promise<void> {
-  const { data: existingCategories, error } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("user_id", userId);
-
-  if (error || existingCategories.length > 0) {
-    return;
-  }
-
-  await replaceCategories(userId, DEFAULT_CATEGORIES);
-}
-
-export async function loadNetWorthState(userId: string): Promise<{
+export async function loadNetWorthState(): Promise<{
   categories: Category[];
   monthlyData: MonthlyData;
   fireSettings: FireSettings;
 }> {
-  await seedDefaultCategoriesIfNeeded(userId);
+  const response = await apiGet<{
+    categoryRows: CategoryRow[];
+    subcategoryRows: SubcategoryRow[];
+    monthlyRows: MonthlyValueRow[];
+    fireSettingsRow: FireSettingsRow | null;
+  }>("/api/net-worth");
 
-  const [
-    { data: categoryRows, error: categoriesError },
-    { data: subcategoryRows, error: subcategoriesError },
-    { data: monthlyRows, error: monthlyError },
-    { data: fireSettingsRows, error: fireSettingsError },
-  ] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("user_id, id, name, archived, sort_order")
-      .eq("user_id", userId)
-      .order("sort_order"),
-    supabase
-      .from("subcategories")
-      .select(
-        "user_id, id, category_id, name, archived, is_reference_only, sort_order",
-      )
-      .eq("user_id", userId)
-      .order("sort_order"),
-    supabase
-      .from("monthly_values")
-      .select("user_id, year, month, subcategory_id, value, updated_at")
-      .eq("user_id", userId),
-    supabase
-      .from("fire_settings")
-      .select(
-        "user_id, id, annual_spending_goal, pre_fire_annual_spending, withdrawal_rate, expected_annual_return, time_to_fire_algorithm, annual_bonus_amount, non_recurring_bonus_amount, job_loss_monthly_savings_reduction, job_loss_monthly_savings_reduction_months, annual_bonus_month_added, non_recurring_bonus_month_added, monthly_contribution, monthly_income, retirement_system, current_age, date_of_birth, target_fire_age, predicted_death_age, contribution_stop_age, updated_at",
-      )
-      .eq("user_id", userId),
-  ]);
-
-  const error =
-    categoriesError ?? subcategoriesError ?? monthlyError ?? fireSettingsError;
-  if (error) {
-    throw error;
+  if (response.categoryRows.length === 0) {
+    await replaceCategories(DEFAULT_CATEGORIES);
+    return {
+      categories: DEFAULT_CATEGORIES,
+      monthlyData: {},
+      fireSettings: DEFAULT_FIRE_SETTINGS,
+    };
   }
 
   return {
-    categories: buildCategories(categoryRows ?? [], subcategoryRows ?? []),
-    monthlyData: buildMonthlyData(monthlyRows ?? []),
-    fireSettings: mapFireSettingsRow(fireSettingsRows?.[0]),
+    categories: buildCategories(
+      response.categoryRows,
+      response.subcategoryRows,
+    ),
+    monthlyData: buildMonthlyData(response.monthlyRows),
+    fireSettings: mapFireSettingsRow(response.fireSettingsRow),
   };
 }
 
-export function getCachedNetWorthState(userId: string): NetWorthState | null {
-  const inMemoryValue = inMemoryNetWorthStateCache.get(userId);
-  if (inMemoryValue?.version === NET_WORTH_STATE_CACHE_VERSION) {
-    return inMemoryValue.state;
+export function getCachedNetWorthState(): NetWorthState | null {
+  if (inMemoryNetWorthStateCache?.version === NET_WORTH_STATE_CACHE_VERSION) {
+    return inMemoryNetWorthStateCache.state;
   }
 
   if (typeof window === "undefined" || typeof localStorage === "undefined") {
     return null;
   }
 
-  const rawValue = window.localStorage.getItem(
-    buildNetWorthStateCacheKey(userId),
-  );
+  const rawValue = window.localStorage.getItem(NET_WORTH_STATE_CACHE_KEY);
   if (!rawValue) {
     return null;
   }
@@ -327,234 +249,64 @@ export function getCachedNetWorthState(userId: string): NetWorthState | null {
       return null;
     }
 
-    inMemoryNetWorthStateCache.set(userId, parsed);
+    inMemoryNetWorthStateCache = parsed;
     return parsed.state;
   } catch {
     return null;
   }
 }
 
-export function cacheNetWorthState(userId: string, state: NetWorthState): void {
+export function cacheNetWorthState(state: NetWorthState): void {
   const cachedState: CachedNetWorthState = {
     version: NET_WORTH_STATE_CACHE_VERSION,
     savedAt: new Date().toISOString(),
     state,
   };
 
-  inMemoryNetWorthStateCache.set(userId, cachedState);
+  inMemoryNetWorthStateCache = cachedState;
 
   if (typeof window === "undefined" || typeof localStorage === "undefined") {
     return;
   }
 
   window.localStorage.setItem(
-    buildNetWorthStateCacheKey(userId),
+    NET_WORTH_STATE_CACHE_KEY,
     JSON.stringify(cachedState),
   );
 }
 
-function buildNetWorthStateCacheKey(userId: string): string {
-  return `${NET_WORTH_STATE_CACHE_PREFIX}:${userId}`;
-}
-
 export async function saveMonthlyValue(
-  userId: string,
   year: number,
   month: number,
   subcategoryId: string,
   value: number,
 ): Promise<void> {
-  if (value === 0) {
-    const { error } = await supabase
-      .from("monthly_values")
-      .delete()
-      .eq("user_id", userId)
-      .eq("year", year)
-      .eq("month", month)
-      .eq("subcategory_id", subcategoryId);
-
-    if (error) {
-      throw error;
-    }
-
-    return;
-  }
-
-  const { error } = await supabase.from("monthly_values").upsert(
-    {
-      user_id: userId,
-      year,
-      month,
-      subcategory_id: subcategoryId,
-      value,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "user_id,year,month,subcategory_id",
-    },
-  );
-
-  if (error) {
-    throw error;
-  }
+  await apiPatch("/api/net-worth", {
+    type: "monthly-value",
+    payload: { year, month, subcategoryId, value },
+  });
 }
 
 export async function replaceYearMonthlyValues(
-  userId: string,
   year: number,
   valuesBySubcategory: Record<string, number[]>,
 ): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from("monthly_values")
-    .delete()
-    .eq("user_id", userId)
-    .eq("year", year);
-
-  if (deleteError) {
-    throw deleteError;
-  }
-
-  const rows = Object.entries(valuesBySubcategory).flatMap(
-    ([subcategoryId, values]) =>
-      values
-        .map((value, month) => ({ month, value, subcategoryId }))
-        .filter((entry) => entry.value !== 0)
-        .map((entry) => ({
-          user_id: userId,
-          year,
-          month: entry.month,
-          subcategory_id: subcategoryId,
-          value: entry.value,
-          updated_at: new Date().toISOString(),
-        })),
-  );
-
-  if (rows.length === 0) {
-    return;
-  }
-
-  const { error: insertError } = await supabase
-    .from("monthly_values")
-    .insert(rows);
-
-  if (insertError) {
-    throw insertError;
-  }
+  await apiPatch("/api/net-worth", {
+    type: "year",
+    payload: { year, valuesBySubcategory },
+  });
 }
 
-export async function replaceCategories(
-  userId: string,
-  categories: Category[],
-): Promise<void> {
-  const categoryRows: CategoryRow[] = categories.map((category, index) => ({
-    user_id: userId,
-    id: category.id,
-    name: category.name,
-    archived: category.archived,
-    sort_order: index,
-  }));
-
-  const subcategoryRows: SubcategoryRow[] = categories.flatMap((category) =>
-    category.subcategories.map((subcategory, index) => ({
-      user_id: userId,
-      id: subcategory.id,
-      category_id: category.id,
-      name: subcategory.name,
-      archived: subcategory.archived,
-      is_reference_only: subcategory.isReferenceOnly,
-      sort_order: index,
-    })),
-  );
-
-  const [
-    { data: existingCategories, error: categoriesReadError },
-    { data: existingSubcategories, error: subcategoriesReadError },
-  ] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("user_id, id, name, archived, sort_order")
-      .eq("user_id", userId),
-    supabase
-      .from("subcategories")
-      .select(
-        "user_id, id, category_id, name, archived, is_reference_only, sort_order",
-      )
-      .eq("user_id", userId),
-  ]);
-
-  const readError = categoriesReadError ?? subcategoriesReadError;
-  if (readError) {
-    throw readError;
-  }
-
-  const nextCategoryIds = new Set(categoryRows.map((category) => category.id));
-  const nextSubcategoryIds = new Set(
-    subcategoryRows.map((subcategory) => subcategory.id),
-  );
-
-  const removedCategoryIds = (existingCategories ?? [])
-    .filter((category) => !nextCategoryIds.has(category.id))
-    .map((category) => category.id);
-  const removedSubcategoryIds = (existingSubcategories ?? [])
-    .filter((subcategory) => !nextSubcategoryIds.has(subcategory.id))
-    .map((subcategory) => subcategory.id);
-
-  if (removedSubcategoryIds.length > 0) {
-    const { error } = await supabase
-      .from("subcategories")
-      .delete()
-      .eq("user_id", userId)
-      .in("id", removedSubcategoryIds);
-
-    if (error) {
-      throw error;
-    }
-  }
-
-  if (removedCategoryIds.length > 0) {
-    const { error } = await supabase
-      .from("categories")
-      .delete()
-      .eq("user_id", userId)
-      .in("id", removedCategoryIds);
-
-    if (error) {
-      throw error;
-    }
-  }
-
-  if (categoryRows.length > 0) {
-    const { error } = await supabase
-      .from("categories")
-      .upsert(categoryRows, { onConflict: "user_id,id" });
-
-    if (error) {
-      throw error;
-    }
-  }
-
-  if (subcategoryRows.length > 0) {
-    const { error } = await supabase
-      .from("subcategories")
-      .upsert(subcategoryRows, { onConflict: "user_id,id" });
-
-    if (error) {
-      throw error;
-    }
-  }
+export async function replaceCategories(categories: Category[]): Promise<void> {
+  await apiPatch("/api/net-worth", {
+    type: "categories",
+    payload: categories,
+  });
 }
 
-export async function saveFireSettings(
-  userId: string,
-  settings: FireSettings,
-): Promise<void> {
-  const { error } = await supabase
-    .from("fire_settings")
-    .upsert(mapFireSettingsToRow(userId, settings), {
-      onConflict: "user_id,id",
-    });
-
-  if (error) {
-    throw error;
-  }
+export async function saveFireSettings(settings: FireSettings): Promise<void> {
+  await apiPatch("/api/net-worth", {
+    type: "fire-settings",
+    payload: settings,
+  });
 }

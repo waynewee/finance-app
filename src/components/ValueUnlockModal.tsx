@@ -3,16 +3,11 @@ import { Eye, X } from "lucide-react";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 interface Props {
-  accountName: string;
   onUnlock: (password: string) => Promise<void>;
   onClose: () => void;
 }
 
-export default function ValueUnlockModal({
-  accountName,
-  onUnlock,
-  onClose,
-}: Props) {
+export default function ValueUnlockModal({ onUnlock, onClose }: Props) {
   useBodyScrollLock(true);
 
   const [password, setPassword] = useState("");
@@ -52,7 +47,6 @@ export default function ValueUnlockModal({
             <h2 className="text-lg font-semibold text-gray-900">
               Unlock Values
             </h2>
-            <p className="mt-1 text-sm text-gray-500">{accountName}</p>
           </div>
           <button
             onClick={onClose}
@@ -64,8 +58,8 @@ export default function ValueUnlockModal({
 
         <div className="space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
           <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            Enter the account value lock password to reveal balances, charts,
-            and exports for this session.
+            Enter the value lock password to reveal balances, charts, and
+            exports for this session.
           </div>
 
           <label className="block">

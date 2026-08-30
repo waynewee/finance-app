@@ -1,84 +1,46 @@
 # Finance App
 
-Net worth tracking, FIRE planning, shared household access, and an investment planner built with React, TypeScript, Vite, Supabase, and Tailwind CSS.
+Single-user net worth tracking, FIRE planning, and an investment planner built with React, TypeScript, Vite, Tailwind CSS, Neon Postgres, and Vercel serverless functions.
 
 ## Local Setup
 
 1. Install dependencies.
 2. Copy `.env.example` to `.env.local`.
-3. Fill in your Supabase and Finnhub values.
-4. Run `npm run dev`.
+3. Fill in your Neon `DATABASE_URL` and Finnhub API key.
+4. Run the schema in [db/schema.sql](db/schema.sql) against your Neon database.
+5. Run `npm run dev`.
 
 Environment variables:
 
 ```bash
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+# Server-side only (Vercel serverless functions) — do NOT prefix with VITE_
+DATABASE_URL=postgresql://user:password@your-neon-host/dbname?sslmode=require
+
 VITE_FINNHUB_API_KEY=your-finnhub-api-key
-VITE_MAGIC_LINK_REDIRECT_URL=http://localhost:5173/
 ```
 
-The investment planner fetches live quotes from Finnhub in the browser.
+The investment planner fetches live quotes from Finnhub in the browser. All net worth, investment planner, and value lock data is read/written through Vercel serverless functions under `api/`, which talk to Neon over `DATABASE_URL`. The browser never holds a database connection string.
 
-## Supabase Setup
+## Data Layer
 
-Run the schema in [supabase/schema.sql](supabase/schema.sql) inside the Supabase SQL editor.
+- `db/schema.sql` — single-user Neon Postgres schema (no row-level security, no per-user scoping).
+- `api/net-worth.ts` — categories, subcategories, monthly values, and FIRE settings.
+- `api/investment-planner.ts` — investment planner settings, categories, holdings, and allocation profiles.
+- `api/value-lock.ts` — the value lock password (set/clear/verify), hashed with bcrypt.
+- `src/lib/apiClient.ts` — shared fetch wrapper used by the frontend repositories to call these endpoints.
 
-This creates the tables and row-level security policies for:
+## Value Lock
 
-- Net worth categories and monthly values
-- FIRE settings and retirement system config
-- Investment planner assets
-- Shared household accounts, collaborators, and invitations
+This app has no login. Anyone with access to the deployed URL can open it. The "value lock" is a single password (not tied to any account) that hides/reveals balances in the UI for the current browser session. Set or change it via the "Value Lock" button in the header.
 
-Shared household flow:
+## Deployment (Vercel)
 
-1. The owner signs in and opens `Sharing`.
-2. The owner invites a collaborator by email.
-3. The collaborator signs in with that same email.
-4. The app auto-claims the invitation and exposes the shared account in the account switcher.
+1. Push this repo to a Git provider connected to Vercel.
+2. Import the project in Vercel; it will auto-detect the Vite frontend and the `api/` serverless functions.
+3. In the Vercel project settings, add the `DATABASE_URL` environment variable (server-side only) and `VITE_FINNHUB_API_KEY`.
+4. Deploy. Vercel builds the static frontend and deploys each file in `api/` as a serverless function.
 
-## Deployment Checklist
-
-1. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_FINNHUB_API_KEY` in your hosting provider.
-2. Run `npm run build` and make sure `dist/` is generated cleanly.
-3. Deploy the built Vite app as a static site.
-4. In Supabase Auth, add both your local URL and deployed URL to the redirect allow list.
-5. In Supabase Auth, make the site URL match your production domain.
-
-If the app starts without the required env vars, it now renders a setup screen instead of crashing during startup.
-
-## Hosting Notes
-
-- This is a client-side Vite app, so your host should serve `index.html` for app routes.
-- The production build output directory is `dist`.
-- Keep your local and deployed app URLs in Supabase redirect settings, even if you use email OTP.
-- If you want local development to always force localhost as the magic-link return target, set `VITE_MAGIC_LINK_REDIRECT_URL=http://localhost:5173/` in `.env.local`.
-- In Supabase Auth -> URL Configuration, add `http://localhost:5173/**` to Redirect URLs.
-- For email-code sign-in, update the Supabase email template to use `{{ .Token }}` instead of `{{ .ConfirmationURL }}`.
-- If you still use links anywhere in your Supabase email templates, make sure they use `{{ .RedirectTo }}` instead of `{{ .SiteURL }}` or Supabase will keep sending users to the production site URL.
-- iPhone home-screen installs are most reliable with email OTP because the installed web app and Safari do not share auth storage.
-
-## GitHub Pages
-
-This repo now includes a GitHub Pages workflow at `.github/workflows/deploy.yml`.
-
-Steps to finish deployment:
-
-1. Push this repo to GitHub on the `main` branch.
-2. In GitHub, open `Settings` -> `Pages` and set the source to `GitHub Actions`.
-3. In GitHub, open `Settings` -> `Secrets and variables` -> `Actions` and add:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `VITE_FINNHUB_API_KEY`
-4. Push to `main` or manually run the `Deploy to GitHub Pages` workflow.
-5. Open the deployed site at `https://<your-github-username>.github.io/<your-repo-name>/`.
-
-Important notes:
-
-- The Vite base path is set automatically during GitHub Actions builds using the repository name, so local development still runs at `/`.
-- In Supabase Auth, add your production Pages URL to the redirect allow list and set the site URL to that same deployed URL.
-- `VITE_FINNHUB_API_KEY` is a client-side key. On GitHub Pages it will be embedded in the built app and can be viewed by users. If that is not acceptable, move quote fetching behind a server-side proxy or function.
+Vercel is required (instead of a static host like GitHub Pages) because this app depends on serverless functions to reach the Neon database.
 
 ## Commands
 

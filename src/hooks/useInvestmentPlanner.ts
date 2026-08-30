@@ -6,7 +6,7 @@ import {
 } from "../lib/investmentPlannerRepository";
 import { getDefaultInvestmentPlannerData } from "../lib/investmentPlanner";
 
-export function useInvestmentPlanner(accountUserId: string | null) {
+export function useInvestmentPlanner() {
   const [plan, setPlan] = useState<InvestmentPlannerData>(
     getDefaultInvestmentPlannerData(),
   );
@@ -16,20 +16,11 @@ export function useInvestmentPlanner(accountUserId: string | null) {
   useEffect(() => {
     let isMounted = true;
 
-    if (!accountUserId) {
-      setPlan(getDefaultInvestmentPlannerData());
-      setError(null);
-      setIsLoading(false);
-      return () => {
-        isMounted = false;
-      };
-    }
-
     const hydrate = async () => {
       setIsLoading(true);
 
       try {
-        const nextPlan = await loadInvestmentPlannerData(accountUserId);
+        const nextPlan = await loadInvestmentPlannerData();
         if (!isMounted) {
           return;
         }
@@ -58,30 +49,23 @@ export function useInvestmentPlanner(accountUserId: string | null) {
     return () => {
       isMounted = false;
     };
-  }, [accountUserId]);
+  }, []);
 
-  const savePlan = useCallback(
-    async (nextPlan: InvestmentPlannerData) => {
-      if (!accountUserId) {
-        return;
-      }
+  const savePlan = useCallback(async (nextPlan: InvestmentPlannerData) => {
+    setPlan(nextPlan);
 
-      setPlan(nextPlan);
-
-      try {
-        await replaceInvestmentPlannerData(accountUserId, nextPlan);
-        setError(null);
-      } catch (saveError) {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to save planner settings.",
-        );
-        throw saveError;
-      }
-    },
-    [accountUserId],
-  );
+    try {
+      await replaceInvestmentPlannerData(nextPlan);
+      setError(null);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to save planner settings.",
+      );
+      throw saveError;
+    }
+  }, []);
 
   return {
     plan,
