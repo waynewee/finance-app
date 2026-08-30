@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Flame,
-  Gauge,
   Landmark,
   Settings,
   Target,
@@ -14,7 +13,6 @@ import { MONTHS } from "../data/defaultCategories";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import {
   calculateFireProjection,
-  calculateFireVelocity,
   getFireCalculationLookbackMonths,
   type FireProjectionSnapshot,
 } from "../lib/fire";
@@ -95,10 +93,6 @@ function formatYears(value: number | null): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
-}
-
-function formatVelocity(value: number): string {
-  return `${value.toFixed(1)}x`;
 }
 
 function formatMonthPeriod(year: number, monthIndex: number): string {
@@ -529,20 +523,6 @@ export default function FireSummaryCards({
       };
     }, [orderedSnapshots, latestSnapshot, fireSettings, savingsLookbackMonths]);
 
-  const fireVelocity = useMemo(() => {
-    const anchorIndex = orderedSnapshots.findIndex(
-      (snapshot) =>
-        snapshot.year === latestSnapshot?.year &&
-        snapshot.monthIndex === latestSnapshot?.monthIndex,
-    );
-
-    if (anchorIndex < 0) {
-      return null;
-    }
-
-    return calculateFireVelocity(orderedSnapshots, anchorIndex, fireSettings);
-  }, [orderedSnapshots, latestSnapshot, fireSettings]);
-
   const handleSaveSettings = (draft: FireSettingsDraft) => {
     onUpdateFireSettings({ ...fireSettings, ...draft });
     setShowSettingsModal(false);
@@ -647,42 +627,6 @@ export default function FireSummaryCards({
     },
   ];
 
-  if (fireVelocity && fireVelocity.velocity != null) {
-    const velocity = fireVelocity.velocity;
-    // Baseline of 1.0x = FIRE date holding steady (no recession or advance).
-    // Above 1.0x the FIRE date is arriving sooner; below 1.0x (even if
-    // positive) the FIRE date is still slipping later, just more slowly.
-    const paceVsBaseline = velocity - 1;
-    const isOnPace = Math.abs(paceVsBaseline) < 0.05;
-    const isAccelerating = paceVsBaseline >= 0.05;
-    cards.push({
-      label: "FIRE Velocity",
-      value: maskDisplayValue(formatVelocity(velocity), hideValues),
-      helper: displayInlineText(
-        isOnPace
-          ? "Your estimated FIRE date is holding steady (1.0x breakeven pace)"
-          : isAccelerating
-            ? `Your FIRE date is arriving ${Math.abs(paceVsBaseline).toFixed(1)} months sooner each month`
-            : `Your FIRE date is slipping ${Math.abs(paceVsBaseline).toFixed(1)} months later each month`,
-      ),
-      icon: Gauge,
-      accent: isOnPace
-        ? "from-gray-400/20 to-gray-500/10 text-gray-600"
-        : isAccelerating
-          ? "from-emerald-500/20 to-green-500/10 text-emerald-700"
-          : "from-red-500/20 to-red-600/10 text-red-700",
-    });
-  } else {
-    cards.push({
-      label: "FIRE Velocity",
-      value: "-x",
-      helper:
-        "Need 24 months of net worth history to calculate the trailing 12-month FIRE velocity trend.",
-      icon: Gauge,
-      accent: "from-gray-400/20 to-gray-500/10 text-gray-600",
-    });
-  }
-
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -704,7 +648,7 @@ export default function FireSummaryCards({
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
