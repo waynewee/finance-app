@@ -1,7 +1,5 @@
 import { useRef, useState } from "react";
 import {
-  Calculator,
-  FileText,
   Download,
   Lock,
   Settings,
@@ -19,9 +17,7 @@ import NetWorthTable from "./components/NetWorthTable";
 import NetWorthChart from "./components/NetWorthChart";
 import CategoryConfig from "./components/CategoryConfig";
 import ProgressSummary from "./components/ProgressSummary";
-import InvestmentPlannerPage from "./components/InvestmentPlannerPage";
 import FireTracker from "./components/FireTracker";
-import CalculationsPage from "./components/CalculationsPage";
 import RetirementConfigModal from "./components/RetirementConfigModal";
 import ValueLockSettingsModal from "./components/ValueLockSettingsModal";
 import ValueUnlockModal from "./components/ValueUnlockModal";
@@ -34,11 +30,7 @@ import {
 } from "./lib/firePreferences";
 import { buildYearCsv, parseYearCsv } from "./lib/netWorthCsv";
 
-type AppPage =
-  | "net-worth"
-  | "fire-tracker"
-  | "investment-planner"
-  | "calculations";
+type AppPage = "net-worth" | "fire-tracker";
 type NetWorthDisplay = "summary" | "chart";
 
 function App() {
@@ -351,50 +343,6 @@ function App() {
                         </span>
                       ) : null}
                     </button>
-
-                    <button
-                      onClick={() => {
-                        setShowConfig(false);
-                        setActivePage("investment-planner");
-                      }}
-                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
-                        activePage === "investment-planner"
-                          ? "border-[#9FD792] bg-[#EEF9EA] text-[#1E7A18] shadow-sm"
-                          : "border-gray-200 text-gray-600 hover:border-[#9FD792] hover:bg-gray-50 hover:text-[#1E7A18]"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Calculator size={16} />
-                        Planner
-                      </span>
-                      {activePage === "investment-planner" ? (
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#1E7A18]">
-                          Active
-                        </span>
-                      ) : null}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowConfig(false);
-                        setActivePage("calculations");
-                      }}
-                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all ${
-                        activePage === "calculations"
-                          ? "border-slate-300 bg-slate-50 text-slate-800 shadow-sm"
-                          : "border-gray-200 text-gray-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <FileText size={16} />
-                        Calculations
-                      </span>
-                      {activePage === "calculations" ? (
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-800">
-                          Active
-                        </span>
-                      ) : null}
-                    </button>
                   </div>
                 </div>
               </div>
@@ -477,7 +425,7 @@ function App() {
                       />
                     ) : null}
                   </>
-                ) : activePage === "fire-tracker" ? (
+                ) : (
                   <FireTracker
                     hideValues={hideValues}
                     fireSettings={fireSettings}
@@ -488,13 +436,6 @@ function App() {
                     onSnapshotPreferenceChange={updateFireSnapshotPreference}
                     onUpdateFireSettings={updateFireSettings}
                     onOpenRetirementConfig={() => setShowRetirementConfig(true)}
-                  />
-                ) : activePage === "calculations" ? (
-                  <CalculationsPage />
-                ) : (
-                  <InvestmentPlannerPage
-                    hideValues={hideValues}
-                    fireSettings={fireSettings}
                   />
                 )}
 

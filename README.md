@@ -1,6 +1,6 @@
 # Finance App
 
-Single-user net worth tracking, FIRE planning, and an investment planner built with React, TypeScript, Vite, Tailwind CSS, Neon Postgres, and Vercel serverless functions.
+Single-user net worth tracking and FIRE planning built with React, TypeScript, Vite, Tailwind CSS, Neon Postgres, and Vercel serverless functions.
 
 ## Local Setup
 
@@ -15,17 +15,14 @@ Environment variables:
 ```bash
 # Server-side only (Vercel serverless functions) — do NOT prefix with VITE_
 DATABASE_URL=postgresql://user:password@your-neon-host/dbname?sslmode=require
-
-VITE_FINNHUB_API_KEY=your-finnhub-api-key
 ```
 
-The investment planner fetches live quotes from Finnhub in the browser. All net worth, investment planner, and value lock data is read/written through Vercel serverless functions under `api/`, which talk to Neon over `DATABASE_URL`. The browser never holds a database connection string.
+All net worth and value lock data is read/written through Vercel serverless functions under `api/`, which talk to Neon over `DATABASE_URL`. The browser never holds a database connection string.
 
 ## Data Layer
 
 - `db/schema.sql` — single-user Neon Postgres schema (no row-level security, no per-user scoping).
 - `api/net-worth.ts` — categories, subcategories, monthly values, and FIRE settings.
-- `api/investment-planner.ts` — investment planner settings, categories, holdings, and allocation profiles.
 - `api/value-lock.ts` — the value lock password (set/clear/verify), hashed with bcrypt.
 - `src/lib/apiClient.ts` — shared fetch wrapper used by the frontend repositories to call these endpoints.
 
@@ -37,7 +34,7 @@ This app has no login. Anyone with access to the deployed URL can open it. The "
 
 1. Push this repo to a Git provider connected to Vercel.
 2. Import the project in Vercel; it will auto-detect the Vite frontend and the `api/` serverless functions.
-3. In the Vercel project settings, add the `DATABASE_URL` environment variable (server-side only) and `VITE_FINNHUB_API_KEY`.
+3. In the Vercel project settings, add the `DATABASE_URL` environment variable (server-side only).
 4. Deploy. Vercel builds the static frontend and deploys each file in `api/` as a serverless function.
 
 Vercel is required (instead of a static host like GitHub Pages) because this app depends on serverless functions to reach the Neon database.
