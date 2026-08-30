@@ -41,6 +41,115 @@ export function getFireCalculationLookbackMonths(): number {
   return TRAILING_TWELVE_MONTH_COUNT;
 }
 
+export interface FireVelocityPoint {
+  /** 0 = oldest snapshot in the trailing window, higher = more recent. */
+  monthIndex: number;
+  monthsToFire: number | null;
+}
+
+export interface FireVelocityResult {
+  points: FireVelocityPoint[];
+  /** Slope of months-to-go vs. calendar month elapsed (regression). */
+  slope: number | null;
+  /** -slope: positive means the FIRE date is approaching faster, negative means it's slipping. */
+  velocity: number | null;
+  validPointCount: number;
+}
+
+/**
+ * For each of the trailing 12 monthly snapshots ending at `anchorIndex`
+ * (inclusive, within a snapshots array sorted newest-first), recompute
+ * "months to FIRE" as it would have been calculated at that point in time
+ * (using that snapshot's own trailing-12-month savings inference), then fit
+ * a simple linear regression of months-to-go against calendar month elapsed.
+ * FIRE Velocity is the negated slope: positive = FIRE date moving closer
+ * faster than 1 month per month, negative = FIRE date slipping away.
+ */
+export function calculateFireVelocity(
+  orderedSnapshotsDesc: FireProjectionSnapshot[],
+  anchorIndex: number,
+  settings: FireSettings,
+): FireVelocityResult {
+  const windowSize = TRAILING_TWELVE_MONTH_COUNT;
+  const points: FireVelocityPoint[] = [];
+
+  for (let offset = 0; offset < windowSize; offset += 1) {
+    const currentIndex = anchorIndex + offset;
+    const currentSnapshot = orderedSnapshotsDesc[currentIndex];
+    if (anchorIndex < 0 || !currentSnapshot) {
+      continue;
+    }
+
+    const previousSnapshots = orderedSnapshotsDesc.slice(
+      currentIndex + 1,
+      currentIndex + 1 + windowSize,
+    );
+    if (previousSnapshots.length !== windowSize) {
+      continue;
+    }
+
+    const projection = calculateFireProjection(
+      currentSnapshot.total,
+      settings,
+      {
+        currentSnapshot,
+        previousSnapshots,
+      },
+    );
+
+    points.push({
+      monthIndex: windowSize - 1 - offset,
+      monthsToFire: projection.monthsToFire,
+    });
+  }
+
+  const validPoints = points.filter(
+    (point): point is { monthIndex: number; monthsToFire: number } =>
+      point.monthsToFire != null,
+  );
+
+  if (validPoints.length < 2) {
+    return {
+      points,
+      slope: null,
+      velocity: null,
+      validPointCount: validPoints.length,
+    };
+  }
+
+  const meanX =
+    validPoints.reduce((sum, point) => sum + point.monthIndex, 0) /
+    validPoints.length;
+  const meanY =
+    validPoints.reduce((sum, point) => sum + point.monthsToFire, 0) /
+    validPoints.length;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (const point of validPoints) {
+    const dx = point.monthIndex - meanX;
+    numerator += dx * (point.monthsToFire - meanY);
+    denominator += dx * dx;
+  }
+
+  if (denominator === 0) {
+    return {
+      points,
+      slope: null,
+      velocity: null,
+      validPointCount: validPoints.length,
+    };
+  }
+
+  const slope = numerator / denominator;
+  return {
+    points,
+    slope,
+    velocity: -slope,
+    validPointCount: validPoints.length,
+  };
+}
+
 function toMonthlyReturnRate(expectedAnnualReturn: number): number {
   const normalizedAnnualReturn = expectedAnnualReturn / 100;
   if (normalizedAnnualReturn <= -1) {

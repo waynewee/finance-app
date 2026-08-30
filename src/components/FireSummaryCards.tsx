@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Flame,
+  Gauge,
   Landmark,
   Settings,
+  Target,
   TrendingUp,
   X,
   type LucideIcon,
@@ -12,14 +14,12 @@ import { MONTHS } from "../data/defaultCategories";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import {
   calculateFireProjection,
+  calculateFireVelocity,
   getFireCalculationLookbackMonths,
   type FireProjectionSnapshot,
 } from "../lib/fire";
 import { type FireSettings } from "../lib/netWorthRepository";
-import {
-  maskDisplayValue,
-  maskInlineNumbers,
-} from "../lib/valueMasking";
+import { maskDisplayValue, maskInlineNumbers } from "../lib/valueMasking";
 
 interface LatestSnapshot {
   year: number;
@@ -47,6 +47,7 @@ interface SummaryCard {
   value: string;
   subtitle?: string;
   helper: string;
+  helperItalic?: boolean;
   icon: LucideIcon;
   accent: string;
   progressBar?: ProgressBarConfig;
@@ -96,8 +97,8 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-function formatMonthlyEquivalentFromOneOff(value: number): string {
-  return formatCurrency(value / 12);
+function formatVelocity(value: number): string {
+  return `${value.toFixed(1)}x`;
 }
 
 function formatMonthPeriod(year: number, monthIndex: number): string {
@@ -172,6 +173,35 @@ function getProgressBarConfig(fundedPercent: number): ProgressBarConfig {
   };
 }
 
+const MILESTONE_STEP = 25;
+
+interface MilestoneInfo {
+  lastMilestone: number;
+  nextMilestone: number;
+  goalReached: boolean;
+}
+
+function getMilestoneInfo(fundedPercent: number): MilestoneInfo {
+  const clamped = Math.min(Math.max(fundedPercent, 0), 100);
+
+  if (clamped >= 100) {
+    return {
+      lastMilestone: 100,
+      nextMilestone: 100,
+      goalReached: true,
+    };
+  }
+
+  const lastMilestone = Math.floor(clamped / MILESTONE_STEP) * MILESTONE_STEP;
+  const nextMilestone = Math.min(lastMilestone + MILESTONE_STEP, 100);
+
+  return {
+    lastMilestone,
+    nextMilestone,
+    goalReached: false,
+  };
+}
+
 type FireSettingsDraft = Pick<
   FireSettings,
   | "annualSpendingGoal"
@@ -225,8 +255,7 @@ function FireSettingsModal({
               FIRE Settings
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Tune FIRE assumptions and the trailing-12-month savings
-              inference.
+              Tune FIRE assumptions and the trailing-12-month savings inference.
             </p>
           </div>
           <button
@@ -463,63 +492,56 @@ export default function FireSummaryCards({
     [snapshots],
   );
 
-  const {
-    hasEnoughSavingsHistory,
-    projection,
-    missingSavingsHistoryCount,
-    ttmRangeLabel,
-    oldestSavingsSnapshot,
-    selectedMonthLabel,
-  } = useMemo(() => {
-    const selectedSnapshotIndex = orderedSnapshots.findIndex(
+  const { hasEnoughSavingsHistory, projection, missingSavingsHistoryCount } =
+    useMemo(() => {
+      const selectedSnapshotIndex = orderedSnapshots.findIndex(
+        (snapshot) =>
+          snapshot.year === latestSnapshot?.year &&
+          snapshot.monthIndex === latestSnapshot?.monthIndex,
+      );
+      const priorSnapshots =
+        latestSnapshot != null && selectedSnapshotIndex >= 0
+          ? orderedSnapshots.slice(
+              selectedSnapshotIndex + 1,
+              selectedSnapshotIndex + 1 + savingsLookbackMonths,
+            )
+          : [];
+      const nextHasEnoughSavingsHistory =
+        priorSnapshots.length === savingsLookbackMonths;
+      const savingsInferenceSnapshots = nextHasEnoughSavingsHistory
+        ? priorSnapshots
+        : [];
+      const nextProjection = latestSnapshot
+        ? calculateFireProjection(latestSnapshot.total, fireSettings, {
+            currentSnapshot: latestSnapshot,
+            previousSnapshots: savingsInferenceSnapshots,
+          })
+        : null;
+      const nextMissingSavingsHistoryCount = Math.max(
+        savingsLookbackMonths - priorSnapshots.length,
+        0,
+      );
+
+      return {
+        hasEnoughSavingsHistory: nextHasEnoughSavingsHistory,
+        projection: nextProjection,
+        missingSavingsHistoryCount: nextMissingSavingsHistoryCount,
+      };
+    }, [orderedSnapshots, latestSnapshot, fireSettings, savingsLookbackMonths]);
+
+  const fireVelocity = useMemo(() => {
+    const anchorIndex = orderedSnapshots.findIndex(
       (snapshot) =>
         snapshot.year === latestSnapshot?.year &&
         snapshot.monthIndex === latestSnapshot?.monthIndex,
     );
-    const priorSnapshots =
-      latestSnapshot != null && selectedSnapshotIndex >= 0
-        ? orderedSnapshots.slice(
-            selectedSnapshotIndex + 1,
-            selectedSnapshotIndex + 1 + savingsLookbackMonths,
-          )
-        : [];
-    const nextHasEnoughSavingsHistory =
-      priorSnapshots.length === savingsLookbackMonths;
-    const savingsInferenceSnapshots = nextHasEnoughSavingsHistory
-      ? priorSnapshots
-      : [];
-    const nextProjection = latestSnapshot
-      ? calculateFireProjection(latestSnapshot.total, fireSettings, {
-          currentSnapshot: latestSnapshot,
-          previousSnapshots: savingsInferenceSnapshots,
-        })
-      : null;
-    const nextSelectedMonthLabel = latestSnapshot
-      ? formatMonthPeriod(latestSnapshot.year, latestSnapshot.monthIndex)
-      : "No snapshot yet";
-    const nextOldestSavingsSnapshot =
-      savingsInferenceSnapshots[savingsInferenceSnapshots.length - 1] ?? null;
-    const nextMissingSavingsHistoryCount = Math.max(
-      savingsLookbackMonths - priorSnapshots.length,
-      0,
-    );
-    const nextTtmRangeLabel =
-      nextOldestSavingsSnapshot && latestSnapshot
-        ? `${formatMonthPeriod(
-            nextOldestSavingsSnapshot.year,
-            nextOldestSavingsSnapshot.monthIndex,
-          )} to ${nextSelectedMonthLabel}`
-        : "the trailing 12 months";
 
-    return {
-      hasEnoughSavingsHistory: nextHasEnoughSavingsHistory,
-      projection: nextProjection,
-      missingSavingsHistoryCount: nextMissingSavingsHistoryCount,
-      ttmRangeLabel: nextTtmRangeLabel,
-      oldestSavingsSnapshot: nextOldestSavingsSnapshot,
-      selectedMonthLabel: nextSelectedMonthLabel,
-    };
-  }, [orderedSnapshots, latestSnapshot, fireSettings, savingsLookbackMonths]);
+    if (anchorIndex < 0) {
+      return null;
+    }
+
+    return calculateFireVelocity(orderedSnapshots, anchorIndex, fireSettings);
+  }, [orderedSnapshots, latestSnapshot, fireSettings]);
 
   const handleSaveSettings = (draft: FireSettingsDraft) => {
     onUpdateFireSettings({ ...fireSettings, ...draft });
@@ -552,26 +574,17 @@ export default function FireSummaryCards({
 
   const fundedPercent = Math.max(0, (projection.fundedRatio ?? 0) * 100);
   const progressBar = getProgressBarConfig(fundedPercent);
-  const contributionSummary =
-    !hasEnoughSavingsHistory || projection.currentMonthlyContribution == null
-      ? `Add ${missingSavingsHistoryCount} earlier net worth ${missingSavingsHistoryCount === 1 ? "month" : "months"} to calculate your trailing 12-month savings rate.`
-      : fireSettings.annualBonusAmount > 0 ||
-          fireSettings.nonRecurringBonusAmount > 0
-        ? (() => {
-            const parts: string[] = [];
-            if (fireSettings.annualBonusAmount > 0) {
-              parts.push(
-                `removing ${formatCurrency(fireSettings.annualBonusAmount)} recurring annual inflow (normalized to ${formatMonthlyEquivalentFromOneOff(fireSettings.annualBonusAmount)}/mo)`,
-              );
-            }
-            if (fireSettings.nonRecurringBonusAmount > 0) {
-              parts.push(
-                `removing ${formatCurrency(fireSettings.nonRecurringBonusAmount)} non-recurring amount entirely`,
-              );
-            }
-            return `${formatCurrency(projection.currentMonthlyContribution)} per month from TTM (${ttmRangeLabel}) after ${parts.join(" and ")}.`;
-          })()
-        : `${formatCurrency(projection.currentMonthlyContribution)} per month averaged across trailing 12 months from ${oldestSavingsSnapshot ? formatMonthPeriod(oldestSavingsSnapshot.year, oldestSavingsSnapshot.monthIndex) : "n/a"} to ${selectedMonthLabel}.`;
+  const milestoneInfo = getMilestoneInfo(fundedPercent);
+  const fireNumber = projection.fireNumber ?? 0;
+  const accessibleNetWorth = projection.accessibleNetWorth ?? 0;
+  const milestoneTargetNetWorth =
+    (fireNumber * milestoneInfo.nextMilestone) / 100;
+  const milestonePercent = milestoneInfo.goalReached
+    ? 100
+    : milestoneTargetNetWorth > 0
+      ? Math.min((accessibleNetWorth / milestoneTargetNetWorth) * 100, 100)
+      : 0;
+  const milestoneProgressBar = getProgressBarConfig(milestonePercent);
   const timeToFireEligible =
     hasEnoughSavingsHistory && projection.currentMonthlyContribution != null;
   const timeToFireDate = timeToFireEligible
@@ -582,19 +595,34 @@ export default function FireSummaryCards({
       ? `Not by age ${fireSettings.predictedDeathAge}`
       : (timeToFireDate ?? formatYears(projection.yearsToFire))
     : "- years";
-  const timeToFireSubtitle = timeToFireDate
-    ? formatYears(projection.yearsToFire)
-    : undefined;
+  const timeToFireSubtitle =
+    timeToFireEligible &&
+    projection.yearsToFire != null &&
+    projection.yearsToFire <= 0
+      ? "You've already reached your goal!"
+      : timeToFireDate
+        ? `Only ${formatYears(projection.yearsToFire)} to go!`
+        : undefined;
 
   const cards: SummaryCard[] = [
     {
       label: "FIRE Number",
       value: displayCurrency(projection.fireNumber ?? 0),
       helper: displayInlineText(
-        `${formatCurrency(fireSettings.annualSpendingGoal)} spending at ${formatPercent(fireSettings.withdrawalRate)}`,
+        `${formatCurrency(fireSettings.annualSpendingGoal)} annual spending at ${formatPercent(fireSettings.withdrawalRate)} withdrawal rate`,
       ),
       icon: Flame,
       accent: "from-amber-500/20 to-red-500/10 text-orange-700",
+    },
+    {
+      label: "Next Milestone",
+      value: maskDisplayValue(formatPercent(milestonePercent), hideValues),
+      helper: milestoneInfo.goalReached
+        ? "You've reached 100% of your FIRE number!"
+        : `You're close to reaching ${milestoneInfo.nextMilestone}% of your FIRE number!`,
+      icon: Target,
+      accent: "from-amber-500/20 to-orange-500/10 text-amber-700",
+      progressBar: milestoneProgressBar,
     },
     {
       label: "Current Progress",
@@ -607,18 +635,53 @@ export default function FireSummaryCards({
       progressBar,
     },
     {
-      label: "Time To FIRE",
+      label: "Est. FIRE Date",
       value: maskDisplayValue(timeToFireValue, hideValues),
-      subtitle: timeToFireSubtitle
-        ? maskDisplayValue(timeToFireSubtitle, hideValues)
-        : undefined,
-      helper: displayInlineText(
-        `${contributionSummary} ${formatPercent(fireSettings.expectedAnnualReturn)} expected annual return.`,
-      ),
+      helper: `${
+        timeToFireSubtitle
+          ? maskDisplayValue(timeToFireSubtitle, hideValues)
+          : undefined
+      } — Based on FIRE settings`,
       icon: TrendingUp,
       accent: "from-orange-400/20 to-amber-500/10 text-orange-700",
     },
   ];
+
+  if (fireVelocity && fireVelocity.velocity != null) {
+    const velocity = fireVelocity.velocity;
+    // Baseline of 1.0x = FIRE date holding steady (no recession or advance).
+    // Above 1.0x the FIRE date is arriving sooner; below 1.0x (even if
+    // positive) the FIRE date is still slipping later, just more slowly.
+    const paceVsBaseline = velocity - 1;
+    const isOnPace = Math.abs(paceVsBaseline) < 0.05;
+    const isAccelerating = paceVsBaseline >= 0.05;
+    cards.push({
+      label: "FIRE Velocity",
+      value: maskDisplayValue(formatVelocity(velocity), hideValues),
+      helper: displayInlineText(
+        isOnPace
+          ? "Your estimated FIRE date is holding steady (1.0x breakeven pace)"
+          : isAccelerating
+            ? `Your FIRE date is arriving ${Math.abs(paceVsBaseline).toFixed(1)} months sooner each month`
+            : `Your FIRE date is slipping ${Math.abs(paceVsBaseline).toFixed(1)} months later each month`,
+      ),
+      icon: Gauge,
+      accent: isOnPace
+        ? "from-gray-400/20 to-gray-500/10 text-gray-600"
+        : isAccelerating
+          ? "from-emerald-500/20 to-green-500/10 text-emerald-700"
+          : "from-red-500/20 to-red-600/10 text-red-700",
+    });
+  } else {
+    cards.push({
+      label: "FIRE Velocity",
+      value: "-x",
+      helper:
+        "Need 24 months of net worth history to calculate the trailing 12-month FIRE velocity trend.",
+      icon: Gauge,
+      accent: "from-gray-400/20 to-gray-500/10 text-gray-600",
+    });
+  }
 
   return (
     <section>
@@ -641,7 +704,7 @@ export default function FireSummaryCards({
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
@@ -669,7 +732,11 @@ export default function FireSummaryCards({
                   <Icon size={18} />
                 </div>
               </div>
-              <p className="text-sm leading-6 text-gray-500">{card.helper}</p>
+              <p
+                className={`text-sm leading-6 text-gray-500 ${card.helperItalic ? "italic" : ""}`}
+              >
+                {card.helper}
+              </p>
               {card.progressBar ? (
                 <div className="mt-4">
                   <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
